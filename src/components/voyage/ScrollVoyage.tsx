@@ -10,7 +10,6 @@ import { EnlistPirateForm } from '../recruitment/EnlistPirateForm';
 import { WantedPosterWall } from '../posters/WantedPosterWall';
 import { SeaTrialsBoard } from '../trials/SeaTrialsBoard';
 import { CrewRosterManager } from '../crews/CrewRosterManager';
-import { ScoreboardTable } from '../scoreboard/ScoreboardTable';
 import { ChallengeTeamDashboard } from '../dashboard/ChallengeTeamDashboard';
 import { DualModeShowcaseCard } from '../common/DualModeShowcaseCard';
 import { JollyRogerAvatar } from '../common/SvgIcons';
@@ -346,7 +345,6 @@ export const ScrollVoyage: React.FC = () => {
         {/* ======================================================== */}
         <section id="scene-scoreboard" className="scroll-mt-24 space-y-8">
           <ChallengeTeamDashboard />
-          <ScoreboardTable />
         </section>
 
       </main>

@@ -5,7 +5,7 @@ import { evaluateChallengeFit } from '../../services/teamEngine';
 import { JollyRogerAvatar } from '../common/SvgIcons';
 import { CreateTrialModal } from '../trials/CreateTrialModal';
 import { 
-  Trophy, Users, CheckCircle2, AlertTriangle, Shield, Cpu, Code, 
+  Trophy, Users, CheckCircle2, Circle, AlertTriangle, Shield, Cpu, Code, 
   Layers, Plus, RefreshCw, Copy, Check, ChevronRight, X, ExternalLink, Sparkles
 } from 'lucide-react';
 
@@ -23,6 +23,8 @@ export const ChallengeTeamDashboard: React.FC<ChallengeTeamDashboardProps> = ({
     crews, 
     participants, 
     assignChallengeToCrew, 
+    assignChallengeToTeam,
+    toggleChallengeCompletion,
     assembleFleet, 
     showToast 
   } = useFleetStore();
@@ -183,7 +185,10 @@ export const ChallengeTeamDashboard: React.FC<ChallengeTeamDashboardProps> = ({
                     : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-850'
                 }`}
               >
-                <span>{c.name}</span>
+                <span className="flex items-center gap-1.5">
+                  {c.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                  <span>{c.name}</span>
+                </span>
                 <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-black ${
                   isSelected ? 'bg-slate-950 text-amber-300' : 'bg-slate-800 text-slate-400'
                 }`}>
@@ -204,16 +209,49 @@ export const ChallengeTeamDashboard: React.FC<ChallengeTeamDashboardProps> = ({
         <div className="lg:col-span-5 space-y-4">
           
           {/* Challenge Detail Card */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xl">
+          <div className={`bg-slate-900/90 border rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xl transition-all ${
+            activeChallenge.isCompleted ? 'border-emerald-500/60 ring-1 ring-emerald-500/20' : 'border-slate-800'
+          }`}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-950 text-orange-400 border border-orange-500/40 mb-1.5">
-                  {activeChallenge.category}
-                </span>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-950 text-orange-400 border border-orange-500/40">
+                    {activeChallenge.category}
+                  </span>
+                  {activeChallenge.isCompleted && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950/90 text-emerald-300 border border-emerald-500/50">
+                      <Check className="w-3 h-3 text-emerald-400" /> Completed
+                    </span>
+                  )}
+                </div>
                 <h3 className="font-pirate text-2xl text-parchment leading-tight">
                   {activeChallenge.name}
                 </h3>
               </div>
+
+              {/* Tick-Check Completion Button */}
+              <button
+                type="button"
+                onClick={() => toggleChallengeCompletion(activeChallenge.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer shrink-0 ${
+                  activeChallenge.isCompleted
+                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300 shadow-emerald-500/20'
+                    : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 hover:text-white hover:border-amber-500/50'
+                }`}
+                title={activeChallenge.isCompleted ? 'Mark challenge as incomplete' : 'Tick-check challenge as completed'}
+              >
+                {activeChallenge.isCompleted ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
+                    <span>Completed</span>
+                  </>
+                ) : (
+                  <>
+                    <Circle className="w-4 h-4 text-slate-400" />
+                    <span>Mark Complete</span>
+                  </>
+                )}
+              </button>
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
@@ -309,12 +347,12 @@ export const ChallengeTeamDashboard: React.FC<ChallengeTeamDashboardProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Currently Fielded Team:
+                  Select & Field Fleet Team:
                 </span>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex flex-wrap items-center gap-2 mt-1">
                   <select
                     value={currentCrew.id}
-                    onChange={(e) => handleAssignTeam(e.target.value)}
+                    onChange={(e) => setActiveCrewId(e.target.value)}
                     className="px-3 py-1.5 rounded-xl bg-slate-950 border border-amber-500/40 font-pirate text-xl text-amber-300 outline-none cursor-pointer"
                   >
                     {crews.map(cr => (
@@ -323,9 +361,22 @@ export const ChallengeTeamDashboard: React.FC<ChallengeTeamDashboardProps> = ({
                       </option>
                     ))}
                   </select>
-                  <span className="text-xs text-slate-400 hidden sm:inline">
-                    Flagship: {currentCrew.shipName}
-                  </span>
+
+                  {/* Explicit Assign Button / Status */}
+                  {currentCrew.assignedChallengeId === activeChallenge.id ? (
+                    <span className="px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                      <Check className="w-3.5 h-3.5 text-emerald-400" /> Assigned to this Trial
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleAssignTeam(currentCrew.id)}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>Assign Challenge to Team</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

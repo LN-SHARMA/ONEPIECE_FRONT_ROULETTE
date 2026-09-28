@@ -42,9 +42,11 @@ interface FleetStore extends FleetState {
   updateParticipant: (p: Participant) => Promise<void>;
   deleteParticipant: (id: string) => Promise<void>;
 
-  // Challenge CRUD
+  // Challenge CRUD & Management
   addChallenge: (c: Omit<Challenge, 'id'>) => Promise<void>;
   deleteChallenge: (id: string) => Promise<void>;
+  toggleChallengeCompletion: (challengeId: string) => Promise<void>;
+  assignChallengeToTeam: (challengeId: string, crewId: string) => Promise<void>;
 
   // Event Config & Generation
   updateConfig: (patch: Partial<EventConfig>) => void;
@@ -334,11 +336,90 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
     });
   },
 
-  assignChallengeToCrew: (crewId, challengeId) => {
-    set((state) => {
-      const crews = state.crews.map(c => c.id === crewId ? { ...c, assignedChallengeId: challengeId } : c);
-      return { crews };
+  toggleChallengeCompletion: async (challengeId: string) => {
+    const currentChallenges = get().challenges;
+    const target = currentChallenges.find(c => c.id === challengeId);
+    if (!target) return;
+
+    const willBeCompleted = !target.isCompleted;
+    const updatedChallenges = currentChallenges.map(c => 
+      c.id === challengeId ? { ...c, isCompleted: willBeCompleted } : c
+    );
+
+    set({ challenges: updatedChallenges });
+    await api.saveChallenges(updatedChallenges);
+
+    if (willBeCompleted) {
+      get().addBerries(3000000);
+      get().setHakiVfx('conqueror');
+      get().showToast({
+        title: '🏆 Trial Conquered!',
+        message: `${target.name} marked as COMPLETED! Earned ฿ 3,000,000!`,
+        type: 'haki',
+      });
+    } else {
+      get().showToast({
+        title: 'Trial Reopened',
+        message: `${target.name} status reset to in-progress.`,
+        type: 'info',
+      });
+    }
+  },
+
+  assignChallengeToTeam: async (challengeId: string, crewId: string) => {
+    const currentChallenges = get().challenges;
+    const currentCrews = get().crews;
+    const targetChallenge = currentChallenges.find(c => c.id === challengeId);
+    const targetCrew = currentCrews.find(cr => cr.id === crewId);
+
+    // Update crews: target crew gets assignedChallengeId, any other crew that had this challenge loses it
+    const updatedCrews = currentCrews.map((c) => {
+      if (crewId && c.id === crewId) {
+        return { ...c, assignedChallengeId: challengeId };
+      }
+      if (c.assignedChallengeId === challengeId && c.id !== crewId) {
+        return { ...c, assignedChallengeId: undefined };
+      }
+      return c;
     });
+
+    // Update challenges: set assignedCrewId
+    const updatedChallenges = currentChallenges.map((c) => {
+      if (c.id === challengeId) {
+        return { ...c, assignedCrewId: crewId || undefined };
+      }
+      if (crewId && c.assignedCrewId === crewId && c.id !== challengeId) {
+        return { ...c, assignedCrewId: undefined };
+      }
+      return c;
+    });
+
+    set({ crews: updatedCrews, challenges: updatedChallenges });
+    await api.saveChallenges(updatedChallenges);
+    await api.saveFleetState({
+      crews: updatedCrews,
+      stowaways: get().stowaways,
+      eventConfig: get().eventConfig,
+      balanceScore: get().balanceScore,
+    });
+
+    if (targetCrew && targetChallenge) {
+      get().showToast({
+        title: 'Team Deployed to Challenge!',
+        message: `${targetCrew.name} is now tasked with ${targetChallenge.name}!`,
+        type: 'info',
+      });
+    } else if (!crewId && targetChallenge) {
+      get().showToast({
+        title: 'Challenge Unassigned',
+        message: `${targetChallenge.name} is now open for assignments.`,
+        type: 'info',
+      });
+    }
+  },
+
+  assignChallengeToCrew: (crewId, challengeId) => {
+    get().assignChallengeToTeam(challengeId, crewId);
   },
 
   resetAll: async () => {

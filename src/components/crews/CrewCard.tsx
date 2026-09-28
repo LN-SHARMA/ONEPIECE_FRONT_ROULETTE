@@ -19,7 +19,7 @@ export const CrewCard: React.FC<CrewCardProps> = ({
   onDragStartMember,
   onDropMember,
 }) => {
-  const { toggleCrewLock, toggleMemberPin, eventConfig } = useFleetStore();
+  const { toggleCrewLock, toggleMemberPin, eventConfig, challenges, assignChallengeToCrew } = useFleetStore();
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -92,6 +92,25 @@ export const CrewCard: React.FC<CrewCardProps> = ({
             {crew.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
             <span className="hidden sm:inline">{crew.isLocked ? 'Locked' : 'Lock'}</span>
           </button>
+        </div>
+
+        {/* Assigned Trial Selector (Assigning button & status) */}
+        <div className="mt-3 p-2.5 rounded-2xl bg-slate-950/70 border border-slate-800/90 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <Award className="w-3.5 h-3.5 text-amber-400" /> Assigned Trial:
+          </span>
+          <select
+            value={crew.assignedChallengeId || ''}
+            onChange={(e) => assignChallengeToCrew(crew.id, e.target.value)}
+            className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-500/50 text-amber-300 text-xs font-semibold outline-none max-w-[200px] truncate cursor-pointer transition-colors"
+          >
+            <option value="" className="text-slate-400 font-normal">-- Select Trial to Assign --</option>
+            {challenges.map(c => (
+              <option key={c.id} value={c.id} className="text-slate-100 font-medium">
+                {c.isCompleted ? '✓ ' : ''}{c.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Warnings Banner (Role gaps, low combat, etc.) */}

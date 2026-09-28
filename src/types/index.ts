@@ -144,6 +144,8 @@ export interface Challenge {
     | 'Special';
   requiredRoles: PirateRole[];
   requiredSkills: RequiredSkill[];
+  isCompleted?: boolean;
+  assignedCrewId?: string;
 }
 
 export interface StructuredWarning {
