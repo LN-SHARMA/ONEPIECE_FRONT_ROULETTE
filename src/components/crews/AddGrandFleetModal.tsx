@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useFleetStore } from '../../store/fleetStore';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore, DEMO_USERS } from '../../store/authStore';
+import { useAudioStore } from '../../store/audioStore';
 import { SkillSet, CSE_SKILL_META, GrandFleetSkillConfig } from '../../types';
 import { SKILL_AXES } from '../../services/teamEngine';
 import { 
@@ -97,7 +98,10 @@ export const AddGrandFleetModal: React.FC<AddGrandFleetModalProps> = ({ onClose 
   // Submit Grand Fleet Creation
   const handleCreateGrandFleet = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!useAuthStore.getState().requireAuth('create and configure a Grand Fleet')) return;
+    if (!useAuthStore.getState().isAuthenticated) {
+      useAuthStore.getState().loginWithDemo(DEMO_USERS[0]);
+    }
+    useAudioStore.getState().playCannon();
     const config: GrandFleetSkillConfig = {
       fleetName: fleetName.trim() || 'Grand Fleet',
       crewSize,
@@ -113,7 +117,10 @@ export const AddGrandFleetModal: React.FC<AddGrandFleetModalProps> = ({ onClose 
   // Submit Single Division Creation
   const handleCreateDivision = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!useAuthStore.getState().requireAuth('commission a new fleet division')) return;
+    if (!useAuthStore.getState().isAuthenticated) {
+      useAuthStore.getState().loginWithDemo(DEMO_USERS[0]);
+    }
+    useAudioStore.getState().playSwordClash();
     await addCustomFleetDivision(
       divisionName.trim() || `Grand Fleet Division #${crews.length + 1}`,
       shipName.trim() || 'Thousand Sunny Refit',
@@ -130,11 +137,15 @@ export const AddGrandFleetModal: React.FC<AddGrandFleetModalProps> = ({ onClose 
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto"
-      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-6 sm:pt-10 pb-16 bg-slate-950/45 backdrop-blur-sm overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div 
-        className="w-full max-w-3xl my-8 bg-slate-900 border-2 border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl relative text-slate-100 font-body overflow-hidden"
+        className="w-full max-w-3xl my-2 sm:my-4 bg-slate-900/95 border-2 border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl relative text-slate-100 font-body overflow-hidden backdrop-blur-md"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient background glows */}

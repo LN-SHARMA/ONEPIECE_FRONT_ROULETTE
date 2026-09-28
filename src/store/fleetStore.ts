@@ -9,10 +9,19 @@ import {
   FleetState, 
   GameState, 
   ViewMode, 
-  PirateRole 
+  PirateRole,
+  StructuredWarning
 } from '../types';
 import { api } from '../services/api';
-import { generateTeams, deriveHaki, generateOptimizedGrandFleet, createSkillBasedDivision } from '../services/teamEngine';
+import { 
+  generateTeams, 
+  deriveHaki, 
+  generateOptimizedGrandFleet, 
+  createSkillBasedDivision,
+  computeCrewAxisScores,
+  calculateBalanceScore,
+  evaluateChallengeFit
+} from '../services/teamEngine';
 import { INITIAL_PARTICIPANTS, INITIAL_CHALLENGES } from '../data/seedData';
 import { useAuthStore } from './authStore';
 
@@ -66,6 +75,8 @@ interface FleetStore extends FleetState {
   toggleCrewLock: (crewId: string) => void;
   toggleMemberPin: (crewId: string, participantId: string) => void;
   swapMembers: (crewAId: string, memberAId: string, crewBId: string, memberBId: string) => void;
+  addMemberToCrew: (crewId: string, participantId: string, role?: PirateRole) => void;
+  removeMemberFromCrew: (crewId: string, participantId: string) => void;
   assignChallengeToCrew: (crewId: string, challengeId: string) => void;
   resetAll: () => Promise<void>;
 
@@ -308,19 +319,28 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   toggleCrewLock: (crewId) => {
-    if (!ensureAuthenticated('lock or unlock fleet divisions')) return;
     set((state) => {
       const crews = state.crews.map(c => c.id === crewId ? { ...c, isLocked: !c.isLocked } : c);
       const lockedCrewIds = crews.filter(c => c.isLocked).map(c => c.id);
+      const updatedConfig = { ...state.eventConfig, lockedCrewIds };
+
+      api.saveFleetState({
+        participants: state.participants,
+        challenges: state.challenges,
+        crews,
+        stowaways: state.stowaways,
+        eventConfig: updatedConfig,
+        balanceScore: state.balanceScore,
+      }).catch(console.error);
+
       return {
         crews,
-        eventConfig: { ...state.eventConfig, lockedCrewIds },
+        eventConfig: updatedConfig,
       };
     });
   },
 
   toggleMemberPin: (crewId, participantId) => {
-    if (!ensureAuthenticated('pin or unpin crew members')) return;
     set((state) => {
       const crews = state.crews.map(c => {
         if (c.id !== crewId) return c;
@@ -329,6 +349,16 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
           members: c.members.map(m => m.participantId === participantId ? { ...m, isPinned: !m.isPinned } : m),
         };
       });
+
+      api.saveFleetState({
+        participants: state.participants,
+        challenges: state.challenges,
+        crews,
+        stowaways: state.stowaways,
+        eventConfig: state.eventConfig,
+        balanceScore: state.balanceScore,
+      }).catch(console.error);
+
       return { crews };
     });
   },
@@ -344,23 +374,171 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
       const mB = crewB.members.find(m => m.participantId === memberBId);
       if (!mA || !mB) return state;
 
+      const participantsMap = new Map(state.participants.map(p => [p.id, p]));
+
       const updatedCrews = state.crews.map(c => {
         if (c.id === crewAId) {
-          return {
-            ...c,
-            members: c.members.map(m => m.participantId === memberAId ? { ...m, participantId: memberBId } : m),
-          };
+          const newMembers = c.members.map(m => m.participantId === memberAId ? { ...m, participantId: memberBId } : m);
+          const newAxisScores = computeCrewAxisScores(newMembers, participantsMap);
+          return { ...c, members: newMembers, axisScores: newAxisScores };
         }
         if (c.id === crewBId) {
-          return {
-            ...c,
-            members: c.members.map(m => m.participantId === memberBId ? { ...m, participantId: memberAId } : m),
-          };
+          const newMembers = c.members.map(m => m.participantId === memberBId ? { ...m, participantId: memberAId } : m);
+          const newAxisScores = computeCrewAxisScores(newMembers, participantsMap);
+          return { ...c, members: newMembers, axisScores: newAxisScores };
         }
         return c;
       });
 
-      return { crews: updatedCrews };
+      const newBalance = calculateBalanceScore(updatedCrews);
+      return { crews: updatedCrews, balanceScore: newBalance };
+    });
+  },
+
+  addMemberToCrew: (crewId, participantId, role) => {
+    if (!ensureAuthenticated('add member to fleet division')) return;
+    set((state) => {
+      const participantsMap = new Map(state.participants.map(p => [p.id, p]));
+      const participant = participantsMap.get(participantId);
+      if (!participant) return state;
+
+      const targetCrew = state.crews.find(c => c.id === crewId);
+      if (!targetCrew || targetCrew.members.some(m => m.participantId === participantId)) return state;
+
+      const assignedRole = role || participant.primaryRole || 'Swordsman';
+
+      const updatedCrews = state.crews.map(c => {
+        if (c.id !== crewId) return c;
+        const newMembers = [...c.members, { participantId, assignedRole, isPinned: false }];
+        const newAxisScores = computeCrewAxisScores(newMembers, participantsMap);
+        
+        let hasConqueror = false;
+        for (const m of newMembers) {
+          const p = participantsMap.get(m.participantId);
+          if (p) {
+            const h = deriveHaki(p.skills, p.primaryRole, p.secondaryRole);
+            if (h.conqueror >= 70) hasConqueror = true;
+          }
+        }
+
+        const assignedRoles = new Set(newMembers.map(m => m.assignedRole));
+        const warnings: StructuredWarning[] = [];
+        if (!assignedRoles.has('Captain') && !assignedRoles.has('Tech Lead / Architect')) {
+          warnings.push({
+            type: 'NO_CAPTAIN',
+            crewId: c.id,
+            role: 'Captain',
+            suggestion: 'No Captain/Lead assigned: command coherence reduced.',
+          });
+        }
+        if (newAxisScores.combat < 8) {
+          warnings.push({
+            type: 'LOW_SKILL',
+            crewId: c.id,
+            suggestion: 'Algorithmic problem-solving power is low for high-tier clashes.',
+          });
+        }
+
+        let fitScore = c.fitScore;
+        if (c.assignedChallengeId) {
+          const ch = state.challenges.find(ch => ch.id === c.assignedChallengeId);
+          if (ch) {
+            fitScore = evaluateChallengeFit({ ...c, axisScores: newAxisScores, members: newMembers }, ch, participantsMap);
+          }
+        }
+
+        return {
+          ...c,
+          members: newMembers,
+          axisScores: newAxisScores,
+          hasConqueror,
+          warnings,
+          fitScore,
+        };
+      });
+
+      const updatedStowaways = state.stowaways.filter(id => id !== participantId);
+      const newBalance = calculateBalanceScore(updatedCrews);
+
+      return {
+        crews: updatedCrews,
+        stowaways: updatedStowaways,
+        balanceScore: newBalance,
+      };
+    });
+  },
+
+  removeMemberFromCrew: (crewId, participantId) => {
+    if (!ensureAuthenticated('remove member from fleet division')) return;
+    set((state) => {
+      const participantsMap = new Map(state.participants.map(p => [p.id, p]));
+      let removed = false;
+
+      const updatedCrews = state.crews.map(c => {
+        if (c.id !== crewId) return c;
+        if (!c.members.some(m => m.participantId === participantId)) return c;
+        removed = true;
+        const newMembers = c.members.filter(m => m.participantId !== participantId);
+        const newAxisScores = computeCrewAxisScores(newMembers, participantsMap);
+
+        let hasConqueror = false;
+        for (const m of newMembers) {
+          const p = participantsMap.get(m.participantId);
+          if (p) {
+            const h = deriveHaki(p.skills, p.primaryRole, p.secondaryRole);
+            if (h.conqueror >= 70) hasConqueror = true;
+          }
+        }
+
+        const assignedRoles = new Set(newMembers.map(m => m.assignedRole));
+        const warnings: StructuredWarning[] = [];
+        if (!assignedRoles.has('Captain') && !assignedRoles.has('Tech Lead / Architect')) {
+          warnings.push({
+            type: 'NO_CAPTAIN',
+            crewId: c.id,
+            role: 'Captain',
+            suggestion: 'No Captain/Lead assigned: command coherence reduced.',
+          });
+        }
+        if (newAxisScores.combat < 8) {
+          warnings.push({
+            type: 'LOW_SKILL',
+            crewId: c.id,
+            suggestion: 'Algorithmic problem-solving power is low for high-tier clashes.',
+          });
+        }
+
+        let fitScore = c.fitScore;
+        if (c.assignedChallengeId) {
+          const ch = state.challenges.find(ch => ch.id === c.assignedChallengeId);
+          if (ch) {
+            fitScore = evaluateChallengeFit({ ...c, axisScores: newAxisScores, members: newMembers }, ch, participantsMap);
+          }
+        }
+
+        return {
+          ...c,
+          members: newMembers,
+          axisScores: newAxisScores,
+          hasConqueror,
+          warnings,
+          fitScore,
+        };
+      });
+
+      if (!removed) return state;
+
+      const updatedStowaways = state.stowaways.includes(participantId)
+        ? state.stowaways
+        : [...state.stowaways, participantId];
+
+      const newBalance = calculateBalanceScore(updatedCrews);
+
+      return {
+        crews: updatedCrews,
+        stowaways: updatedStowaways,
+        balanceScore: newBalance,
+      };
     });
   },
 

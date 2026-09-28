@@ -70,7 +70,9 @@ export const LoginModal: React.FC = () => {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 sm:pt-14 pb-12 bg-slate-950/45 backdrop-blur-sm overflow-y-auto animate-fade-in"
       onClick={closeLoginModal}
     >
       <div 

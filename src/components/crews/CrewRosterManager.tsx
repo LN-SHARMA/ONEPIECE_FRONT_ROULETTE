@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useFleetStore } from '../../store/fleetStore';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore, DEMO_USERS } from '../../store/authStore';
+import { useAudioStore } from '../../store/audioStore';
 import { CrewCard } from './CrewCard';
 import { StowawayList } from './StowawayList';
 import { AddGrandFleetModal } from './AddGrandFleetModal';
@@ -15,7 +16,11 @@ import {
   Plus, 
   ShieldCheck,
   Lock,
-  LogIn
+  LogIn,
+  Search,
+  X,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 export const CrewRosterManager: React.FC = () => {
@@ -31,11 +36,43 @@ export const CrewRosterManager: React.FC = () => {
     isGenerating,
   } = useFleetStore();
   const { isAuthenticated, requireAuth, openLoginModal } = useAuthStore();
+  const { playCannon, playHakiSurge, playWoodClick } = useAudioStore();
 
   const [draggedItem, setDraggedItem] = useState<{ crewId: string; memberId: string } | null>(null);
   const [showGrandFleetModal, setShowGrandFleetModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAllCrews, setShowAllCrews] = useState(false);
 
-  const participantsMap = new Map(participants.map(p => [p.id, p]));
+  const participantsMap = useMemo(
+    () => new Map(participants.map(p => [p.id, p])),
+    [participants]
+  );
+
+  const filteredCrews = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return crews;
+    return crews.filter(crew => {
+      const matchCrewName = crew.name.toLowerCase().includes(q);
+      const matchShip = crew.shipName.toLowerCase().includes(q);
+      const matchMembers = crew.members.some(m => {
+        const p = participantsMap.get(m.participantId);
+        if (!p) return false;
+        return (
+          p.name.toLowerCase().includes(q) ||
+          p.epithet.toLowerCase().includes(q) ||
+          m.assignedRole.toLowerCase().includes(q)
+        );
+      });
+      return matchCrewName || matchShip || matchMembers;
+    });
+  }, [crews, searchQuery, participantsMap]);
+
+  const displayedCrews = useMemo(() => {
+    if (searchQuery.trim()) {
+      return filteredCrews;
+    }
+    return showAllCrews ? filteredCrews : filteredCrews.slice(0, 3);
+  }, [filteredCrews, showAllCrews, searchQuery]);
 
   // Calculate current fleet average fit score
   const avgFit = crews.length > 0
@@ -74,22 +111,32 @@ export const CrewRosterManager: React.FC = () => {
   };
 
   const handleAddGrandFleet = () => {
-    if (!requireAuth('configure and add a Grand Fleet')) return;
+    playWoodClick();
     setShowGrandFleetModal(true);
   };
 
   const handleReshuffle = () => {
-    if (!requireAuth('reshuffle Grand Fleet divisions')) return;
+    if (!isAuthenticated) {
+      useAuthStore.getState().loginWithDemo(DEMO_USERS[0]);
+    }
+    playCannon();
     assembleFleet(true);
   };
 
   const handleAssemble = () => {
-    if (!requireAuth('assemble the Grand Fleet')) return;
+    if (!isAuthenticated) {
+      useAuthStore.getState().loginWithDemo(DEMO_USERS[0]);
+    }
+    playCannon();
+    playHakiSurge();
     assembleFleet(false);
   };
 
   const handleAutoOptimize = () => {
-    if (!requireAuth('auto-optimize Grand Fleet for trials')) return;
+    if (!isAuthenticated) {
+      useAuthStore.getState().loginWithDemo(DEMO_USERS[0]);
+    }
+    playHakiSurge();
     autoOptimizeGrandFleet(targetFitCriteria);
   };
 
@@ -148,9 +195,9 @@ export const CrewRosterManager: React.FC = () => {
             type="button"
             onClick={handleAddGrandFleet}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 rounded-2xl text-xs sm:text-sm font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
-            title={!isAuthenticated ? 'Sign in to configure custom grand fleets' : 'Add or configure Grand Fleet based on custom selected skills'}
+            title="Add or configure Grand Fleet based on custom selected skills"
           >
-            {isAuthenticated ? <Sliders className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            <Sliders className="w-4 h-4" />
             <span>+ Add Grand Fleet by Skills</span>
           </button>
 
@@ -247,6 +294,42 @@ export const CrewRosterManager: React.FC = () => {
         </div>
       )}
 
+      {/* Fleet Controls: Section Counter & Live Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-6 pb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-red-400">
+            Grand Fleet Divisions
+          </span>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 shadow-inner">
+            {searchQuery.trim()
+              ? `${filteredCrews.length} of ${crews.length} matches`
+              : `${displayedCrews.length} of ${crews.length} shown`}
+          </span>
+        </div>
+
+        {/* Search Bar Input */}
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search fleets by name, ship, or member..."
+            className="w-full pl-9 pr-8 py-2 bg-slate-900/90 border border-slate-700/80 focus:border-red-400 focus:ring-1 focus:ring-red-400/20 text-slate-100 placeholder-slate-500 text-xs rounded-xl outline-none transition-all"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded-md cursor-pointer"
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Crews Grid (R11) */}
       {crews.length === 0 ? (
         <div className="py-20 text-center text-slate-400">
@@ -255,8 +338,8 @@ export const CrewRosterManager: React.FC = () => {
           <p className="text-sm mt-1">Tap "+ Add Grand Fleet by Skills" or "Assemble" to form the fleet.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 my-8">
-          {crews.map((crew) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 my-6">
+          {displayedCrews.map((crew) => (
             <CrewCard
               key={crew.id}
               crew={crew}
@@ -265,6 +348,46 @@ export const CrewRosterManager: React.FC = () => {
               onDropMember={handleDrop}
             />
           ))}
+        </div>
+      )}
+
+      {/* Empty Search Result State */}
+      {crews.length > 0 && filteredCrews.length === 0 && (
+        <div className="py-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800 my-6">
+          <p className="font-pirate text-2xl text-red-300">No Fleets Found</p>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            No fleets matched "{searchQuery}". Try searching for another fleet, ship, or nakama name.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="mt-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-red-300 border border-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+          >
+            Clear Search
+          </button>
+        </div>
+      )}
+
+      {/* See More Fleets / Show Less Toggle Button */}
+      {!searchQuery.trim() && crews.length > 3 && (
+        <div className="my-6 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowAllCrews(!showAllCrews)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-slate-800 hover:to-slate-750 border border-red-500/40 hover:border-red-400 text-red-300 font-bold rounded-2xl text-xs sm:text-sm shadow-xl hover:shadow-red-500/10 active:scale-95 transition-all cursor-pointer"
+          >
+            {showAllCrews ? (
+              <>
+                <ChevronUp className="w-4 h-4 text-red-400" />
+                <span>Show Less (Top 3 Fleets)</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-4 h-4 text-red-400" />
+                <span>See More Fleets ({crews.length})</span>
+              </>
+            )}
+          </button>
         </div>
       )}
 

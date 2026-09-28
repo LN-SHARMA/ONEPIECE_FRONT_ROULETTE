@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { useFleetStore } from '../../store/fleetStore';
 import { useAuthStore } from '../../store/authStore';
-import { ALL_ROLES, PirateRole, DevilFruitType, SkillSet, JollyRogerStyle, CSE_SKILL_META } from '../../types';
+import { ALL_ROLES, PirateRole, SkillSet, JollyRogerStyle, CSE_SKILL_META } from '../../types';
 import { SKILL_AXES, deriveHaki } from '../../services/teamEngine';
-import { JollyRogerAvatar, DevilFruitSwirlIcon } from '../common/SvgIcons';
-import { PlusCircle, Sparkles, HelpCircle, ShieldAlert, Check, Lock } from 'lucide-react';
+import { JollyRogerAvatar } from '../common/SvgIcons';
+import { PlusCircle, Sparkles, Lock } from 'lucide-react';
 
-const DEVIL_FRUITS: DevilFruitType[] = ['None', 'Paramecia', 'Zoan', 'Logia', 'Mythical Zoan'];
-
-const HAT_TYPES: JollyRogerStyle['hatType'][] = ['straw', 'tricorn', 'bandana', 'tophat', 'crown'];
-const SYMBOLS: JollyRogerStyle['symbol'][] = ['crossbones', 'swords', 'flames', 'heart', 'anchor'];
+const DEFAULT_JOLLY_ROGER: JollyRogerStyle = {
+  baseColor: '#18181b',
+  accentColor: '#f59e0b',
+  hatType: 'straw',
+  symbol: 'swords',
+};
 
 export const EnlistPirateForm: React.FC = () => {
   const { addParticipant } = useFleetStore();
@@ -27,20 +29,11 @@ export const EnlistPirateForm: React.FC = () => {
     engineering: 2,
     wits: 3,
   });
-  const [devilFruit, setDevilFruit] = useState<DevilFruitType>('Paramecia');
   const [interestsInput, setInterestsInput] = useState('Ancient Lore, Duelist');
-  const [jollyRoger, setJollyRoger] = useState<JollyRogerStyle>({
-    baseColor: '#18181b',
-    accentColor: '#f59e0b',
-    hatType: 'straw',
-    symbol: 'swords',
-  });
-  const [showWeaknessTooltip, setShowWeaknessTooltip] = useState(false);
 
   // Live Bounty Calculation
   const skillSum = Object.values(skills).reduce((a, b) => a + b, 0);
-  const fruitMultiplier = devilFruit === 'Mythical Zoan' ? 2.5 : devilFruit === 'Logia' ? 2.0 : devilFruit === 'Paramecia' ? 1.4 : devilFruit === 'Zoan' ? 1.3 : 1.0;
-  const estimatedBounty = Math.round((skillSum * 25000000 + 50000000) * fruitMultiplier);
+  const estimatedBounty = Math.round(skillSum * 25000000 + 50000000);
 
   // Live Derived Haki stats
   const derivedHaki = deriveHaki(skills, primaryRole, secondaryRole);
@@ -64,8 +57,8 @@ export const EnlistPirateForm: React.FC = () => {
       secondaryRole,
       skills,
       interests,
-      devilFruit,
-      jollyRogerStyle: jollyRoger,
+      devilFruit: 'None',
+      jollyRogerStyle: DEFAULT_JOLLY_ROGER,
     });
 
     // Reset form
@@ -223,93 +216,7 @@ export const EnlistPirateForm: React.FC = () => {
             </div>
           </div>
 
-          {/* Devil Fruit & Sea-Stone Weakness Tooltip (R2 + Lore) */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                Devil Fruit Affinity
-                <button
-                  type="button"
-                  onMouseEnter={() => setShowWeaknessTooltip(true)}
-                  onMouseLeave={() => setShowWeaknessTooltip(false)}
-                  onClick={() => setShowWeaknessTooltip(!showWeaknessTooltip)}
-                  className="text-amber-400 hover:text-amber-300 focus:outline-none"
-                  aria-label="Toggle Sea-Stone weakness explanation"
-                >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                </button>
-              </span>
-              {devilFruit !== 'None' && (
-                <span className="text-[11px] text-red-400 flex items-center gap-1 font-semibold">
-                  <ShieldAlert className="w-3.5 h-3.5" /> Sea-Stone Weakness Active
-                </span>
-              )}
-            </div>
 
-            {/* Sea Stone Weakness tooltip panel */}
-            {showWeaknessTooltip && (
-              <div className="p-3 mb-2 rounded-xl bg-red-950/80 border border-red-500/50 text-xs text-red-200 shadow-lg">
-                <strong>Sea-Stone Weakness:</strong> Devil fruit eaters gain massive offensive multipliers, but lose strength in submerged trials (e.g. Donut Race). Ensure non-fruit hammer nakama are in the crew to prevent penalties!
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              {DEVIL_FRUITS.map((fruit) => (
-                <button
-                  key={fruit}
-                  type="button"
-                  onClick={() => setDevilFruit(fruit)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                    devilFruit === fruit
-                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30 scale-105'
-                      : 'bg-slate-900 border border-slate-700 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  <DevilFruitSwirlIcon type={fruit} className="w-4 h-4" />
-                  <span>{fruit}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Jolly Roger Customizer */}
-          <div className="pt-2 border-t border-slate-800">
-            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-              Jolly Roger Insignia (Hat & Symbol)
-            </span>
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-1">
-                <span className="text-[11px] text-slate-400 mr-1">Hat:</span>
-                {HAT_TYPES.map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => setJollyRoger({ ...jollyRoger, hatType: h })}
-                    className={`px-2 py-0.5 rounded text-[11px] capitalize ${
-                      jollyRoger.hatType === h ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    {h}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[11px] text-slate-400 mr-1">Symbol:</span>
-                {SYMBOLS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setJollyRoger({ ...jollyRoger, symbol: s })}
-                    className={`px-2 py-0.5 rounded text-[11px] capitalize ${
-                      jollyRoger.symbol === s ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
 
           {/* Free-Tag Interests */}
           <div>
@@ -364,17 +271,12 @@ export const EnlistPirateForm: React.FC = () => {
             {/* Poster Image / Avatar Frame */}
             <div className="my-3 mx-auto w-36 h-36 bg-[#e2d4b7] border-2 border-[#4a3018] rounded flex items-center justify-center relative overflow-hidden shadow-inner">
               <JollyRogerAvatar
-                hatType={jollyRoger.hatType}
-                symbol={jollyRoger.symbol}
-                baseColor={jollyRoger.baseColor}
-                accentColor={jollyRoger.accentColor}
+                hatType={DEFAULT_JOLLY_ROGER.hatType}
+                symbol={DEFAULT_JOLLY_ROGER.symbol}
+                baseColor={DEFAULT_JOLLY_ROGER.baseColor}
+                accentColor={DEFAULT_JOLLY_ROGER.accentColor}
                 size={110}
               />
-              {devilFruit !== 'None' && (
-                <div className="absolute bottom-1 right-1 p-1 bg-black/70 rounded-full">
-                  <DevilFruitSwirlIcon type={devilFruit} className="w-4 h-4" />
-                </div>
-              )}
             </div>
 
             {/* Name & Epithet */}

@@ -1,8 +1,7 @@
 import React from 'react';
 import { useFleetStore } from '../../store/fleetStore';
 import { useAuthStore } from '../../store/authStore';
-import { ALL_ROLES, PirateRole } from '../../types';
-import { Shield, Users, Trophy, Scale, Anchor, RefreshCw, Zap, Lock } from 'lucide-react';
+import { Users, Trophy, Scale, Anchor, RefreshCw, Zap, Lock } from 'lucide-react';
 
 export const OrganizerDashboard: React.FC<{ onJumpToSection?: (id: string) => void }> = ({ onJumpToSection }) => {
   const { participants, crews, challenges, balanceScore, assembleFleet, resetAll, isGenerating } = useFleetStore();
@@ -23,15 +22,7 @@ export const OrganizerDashboard: React.FC<{ onJumpToSection?: (id: string) => vo
     resetAll();
   };
 
-  // Role Coverage Heatmap calculation
-  const roleCounts: Record<PirateRole, number> = ALL_ROLES.reduce((acc, role) => {
-    acc[role] = 0;
-    return acc;
-  }, {} as Record<PirateRole, number>);
 
-  participants.forEach(p => {
-    roleCounts[p.primaryRole] = (roleCounts[p.primaryRole] || 0) + 1;
-  });
 
   return (
     <div className="w-full glass-panel rounded-3xl p-6 sm:p-8 border border-amber-500/30 text-slate-100 shadow-2xl relative overflow-hidden">
@@ -142,47 +133,6 @@ export const OrganizerDashboard: React.FC<{ onJumpToSection?: (id: string) => vo
         </div>
       </div>
 
-      {/* Role Coverage Heatmap */}
-      <div className="mt-6 pt-5 border-t border-slate-800">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-cyan-400" />
-            Fleet Role Coverage Heatmap
-          </span>
-          <span className="text-xs text-slate-400">
-            Primary role allocation across entire roster
-          </span>
-        </div>
-
-        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2">
-          {ALL_ROLES.map((role) => {
-            const count = roleCounts[role] || 0;
-            const isLow = count === 0;
-            const isGood = count >= 2;
-
-            return (
-              <div
-                key={role}
-                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all ${
-                  isLow
-                    ? 'bg-red-950/40 border-red-500/40 text-red-300'
-                    : isGood
-                    ? 'bg-slate-900/80 border-cyan-500/40 text-cyan-200'
-                    : 'bg-slate-900/60 border-slate-700 text-slate-300'
-                }`}
-              >
-                <span className="text-[11px] font-semibold truncate w-full">{role}</span>
-                <span className="font-pirate text-2xl mt-0.5 leading-none">
-                  {count}
-                </span>
-                <span className="text-[9px] uppercase tracking-wider opacity-75 mt-1">
-                  {isLow ? 'Critical Gap' : `${count} Ready`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 };

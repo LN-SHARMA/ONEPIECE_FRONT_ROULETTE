@@ -12,6 +12,14 @@ export default {
         heading: ['"Outfit"', 'sans-serif'],
         body: ['"Inter"', 'sans-serif'],
       },
+      fontSize: {
+        '2xs': ['0.78rem', { lineHeight: '1.1rem' }],
+        'xs': ['0.85rem', { lineHeight: '1.25rem' }],
+        'sm': ['0.95rem', { lineHeight: '1.4rem' }],
+        'base': ['1.075rem', { lineHeight: '1.65rem' }],
+        'lg': ['1.2rem', { lineHeight: '1.75rem' }],
+        'xl': ['1.35rem', { lineHeight: '1.85rem' }],
+      },
       colors: {
         parchment: {
           light: '#fdf6e2',

@@ -59,7 +59,10 @@ export const PirateDetailModal: React.FC<PirateDetailModalProps> = ({ participan
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/45 backdrop-blur-sm"
     >
       <div className="w-full max-w-xl glass-panel rounded-3xl p-6 sm:p-8 border border-amber-500/40 text-slate-100 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
         <button

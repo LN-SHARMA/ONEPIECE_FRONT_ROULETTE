@@ -203,70 +203,98 @@ export function generateTeams(
 
   // 3. Preserve locked crews and pinned members
   const lockedCrewIdsSet = new Set(config.lockedCrewIds || []);
-  const preservedCrews: Crew[] = [];
   const assignedParticipantIds = new Set<string>();
 
-  for (const existing of existingCrews) {
-    if (lockedCrewIdsSet.has(existing.id) || existing.isLocked) {
-      // Validate all members exist
-      const validMembers = existing.members.filter(m => participantsMap.has(m.participantId));
-      for (const m of validMembers) {
+  let activeCrews: Crew[] = [];
+
+  if (existingCrews.length > 0) {
+    const preservedLocked: Crew[] = [];
+    const nonLockedExisting: Crew[] = [];
+
+    for (const existing of existingCrews) {
+      if (lockedCrewIdsSet.has(existing.id) || existing.isLocked) {
+        const validMembers = existing.members.filter(m => participantsMap.has(m.participantId));
+        for (const m of validMembers) {
+          assignedParticipantIds.add(m.participantId);
+        }
+        preservedLocked.push({
+          ...existing,
+          isLocked: true,
+          members: validMembers,
+          axisScores: computeCrewAxisScores(validMembers, participantsMap),
+        });
+      } else {
+        nonLockedExisting.push(existing);
+      }
+    }
+
+    const targetCrewCount = Math.max(numCrews, preservedLocked.length);
+    const nonLockedSlots = Math.max(0, targetCrewCount - preservedLocked.length);
+
+    const keptNonLocked = nonLockedExisting.slice(0, nonLockedSlots).map(c => {
+      const pinnedMembers = c.members.filter(m => m.isPinned && participantsMap.has(m.participantId));
+      for (const m of pinnedMembers) {
         assignedParticipantIds.add(m.participantId);
       }
-      preservedCrews.push({
-        ...existing,
-        isLocked: true,
-        members: validMembers,
-        axisScores: computeCrewAxisScores(validMembers, participantsMap),
+      return {
+        ...c,
+        isLocked: false,
+        members: pinnedMembers,
+        axisScores: computeCrewAxisScores(pinnedMembers, participantsMap),
+      };
+    });
+
+    const keptIds = new Set([...preservedLocked.map(c => c.id), ...keptNonLocked.map(c => c.id)]);
+    const keptMap = new Map([...preservedLocked, ...keptNonLocked].map(c => [c.id, c]));
+
+    activeCrews = existingCrews
+      .filter(c => keptIds.has(c.id))
+      .map(c => keptMap.get(c.id)!);
+
+    // If more crews are needed (e.g. targetCrewCount > activeCrews.length), append new ones
+    if (targetCrewCount > activeCrews.length) {
+      const extraNeeded = targetCrewCount - activeCrews.length;
+      for (let i = 0; i < extraNeeded; i++) {
+        const pIdx = (activeCrews.length + i) % CREW_NAME_PREFIXES.length;
+        const sIdx = (activeCrews.length + i * 3) % CREW_NAME_SUFFIXES.length;
+        const shipIdx = (activeCrews.length + i) % SHIP_NAMES.length;
+
+        activeCrews.push({
+          id: `crew-${Date.now()}-${activeCrews.length + 1}-${Math.floor(rng() * 1000)}`,
+          name: `${CREW_NAME_PREFIXES[pIdx]} ${CREW_NAME_SUFFIXES[sIdx]}`,
+          shipName: SHIP_NAMES[shipIdx],
+          jollyRogerSvgSeed: `jr-seed-${i}-${Math.floor(rng() * 10000)}`,
+          members: [],
+          isLocked: false,
+          axisScores: { combat: 0, navigation: 0, cooking: 0, medical: 0, engineering: 0, wits: 0 },
+          hasConqueror: false,
+          warnings: [],
+        });
+      }
+    }
+  } else {
+    // No existing crews: create all numCrews fresh
+    for (let i = 0; i < numCrews; i++) {
+      const pIdx = i % CREW_NAME_PREFIXES.length;
+      const sIdx = (i * 3) % CREW_NAME_SUFFIXES.length;
+      const shipIdx = i % SHIP_NAMES.length;
+
+      activeCrews.push({
+        id: `crew-${Date.now()}-${i + 1}-${Math.floor(rng() * 1000)}`,
+        name: `${CREW_NAME_PREFIXES[pIdx]} ${CREW_NAME_SUFFIXES[sIdx]}`,
+        shipName: SHIP_NAMES[shipIdx],
+        jollyRogerSvgSeed: `jr-seed-${i}-${Math.floor(rng() * 10000)}`,
+        members: [],
+        isLocked: false,
+        axisScores: { combat: 0, navigation: 0, cooking: 0, medical: 0, engineering: 0, wits: 0 },
+        hasConqueror: false,
+        warnings: [],
       });
     }
   }
-
-  // Preserve pinned members from non-locked crews
-  const pinnedMemberPlacements: { crewIndex: number; member: CrewMember }[] = [];
-  existingCrews.forEach((c, cIdx) => {
-    if (!lockedCrewIdsSet.has(c.id) && !c.isLocked) {
-      c.members.forEach(m => {
-        if (m.isPinned && participantsMap.has(m.participantId)) {
-          pinnedMemberPlacements.push({ crewIndex: cIdx, member: m });
-          assignedParticipantIds.add(m.participantId);
-        }
-      });
-    }
-  });
 
   // 4. Determine pool of unassigned participants
   const availableParticipants = participants.filter(p => !assignedParticipantIds.has(p.id));
-
-  // Determine needed new crews count
-  const newCrewsNeeded = Math.max(0, numCrews - preservedCrews.length);
-  const activeCrews: Crew[] = [...preservedCrews];
-
-  for (let i = 0; i < newCrewsNeeded; i++) {
-    const pIdx = (activeCrews.length + i) % CREW_NAME_PREFIXES.length;
-    const sIdx = (activeCrews.length + i * 3) % CREW_NAME_SUFFIXES.length;
-    const shipIdx = (activeCrews.length + i) % SHIP_NAMES.length;
-
-    activeCrews.push({
-      id: `crew-${Date.now()}-${activeCrews.length + 1}-${Math.floor(rng() * 1000)}`,
-      name: `${CREW_NAME_PREFIXES[pIdx]} ${CREW_NAME_SUFFIXES[sIdx]}`,
-      shipName: SHIP_NAMES[shipIdx],
-      jollyRogerSvgSeed: `jr-seed-${i}-${Math.floor(rng() * 10000)}`,
-      members: [],
-      isLocked: false,
-      axisScores: { combat: 0, navigation: 0, cooking: 0, medical: 0, engineering: 0, wits: 0 },
-      hasConqueror: false,
-      warnings: [],
-    });
-  }
-
-  // Restore pinned members to their respective active crews if available
-  for (const pin of pinnedMemberPlacements) {
-    const targetCrew = activeCrews[pin.crewIndex % activeCrews.length];
-    if (targetCrew && !targetCrew.isLocked) {
-      targetCrew.members.push(pin.member);
-    }
-  }
 
   // 5. Partition Captains / Tech Leads and role matching for remaining available participants
   const isLeaderRole = (r: PirateRole) => r === 'Captain' || r === 'Tech Lead / Architect';
@@ -409,7 +437,10 @@ export function generateTeams(
   }
 
   // 8. Assign challenges & evaluate warnings
-  const availableChallenges = [...challenges];
+  const preassignedChallengeIds = new Set(
+    activeCrews.map(c => c.assignedChallengeId).filter(Boolean)
+  );
+  const availableChallenges = challenges.filter(c => !preassignedChallengeIds.has(c.id));
   for (let i = 0; i < activeCrews.length; i++) {
     const crew = activeCrews[i];
     crew.hasConqueror = crew.members.some(m => m.participantId === conquerorWinnerId);

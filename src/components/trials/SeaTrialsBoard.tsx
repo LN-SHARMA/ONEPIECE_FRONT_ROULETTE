@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFleetStore } from '../../store/fleetStore';
 import { useAuthStore } from '../../store/authStore';
+import { useAudioStore } from '../../store/audioStore';
 import { EventConfigPanel } from './EventConfigPanel';
 import { CreateTrialModal } from './CreateTrialModal';
 import { evaluateChallengeFit } from '../../services/teamEngine';
@@ -16,7 +17,10 @@ import {
   Sparkles,
   Users,
   Lock,
-  LogIn
+  LogIn,
+  Search,
+  X,
+  ChevronUp
 } from 'lucide-react';
 
 export const SeaTrialsBoard: React.FC = () => {
@@ -32,29 +36,54 @@ export const SeaTrialsBoard: React.FC = () => {
   const { isAuthenticated, requireAuth, openLoginModal } = useAuthStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
+
+  const filteredChallenges = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return challenges;
+    return challenges.filter(c => {
+      const matchName = c.name.toLowerCase().includes(q);
+      const matchCategory = c.category.toLowerCase().includes(q);
+      const matchDesc = c.description.toLowerCase().includes(q);
+      const matchRoles = c.requiredRoles?.some(r => r.toLowerCase().includes(q));
+      return matchName || matchCategory || matchDesc || matchRoles;
+    });
+  }, [challenges, searchQuery]);
+
+  const displayedChallenges = useMemo(() => {
+    if (searchQuery.trim()) {
+      return filteredChallenges;
+    }
+    return showAll ? filteredChallenges : filteredChallenges.slice(0, 3);
+  }, [filteredChallenges, showAll, searchQuery]);
 
   const participantsMap = useMemo(
     () => new Map(participants.map(p => [p.id, p])),
     [participants]
   );
 
+  const { playCoinChime, playSwordClash, playWoodClick } = useAudioStore();
+
   const handleCreateTrialClick = () => {
-    if (!requireAuth('sanction new sea trials')) return;
+    playWoodClick();
     setShowCreateModal(true);
   };
 
   const handleToggleCompletion = (id: string) => {
-    if (!requireAuth('update sea trial completion status')) return;
+    playCoinChime();
     toggleChallengeCompletion(id);
   };
 
   const handleDeleteChallenge = (id: string) => {
     if (!requireAuth('delete sea trials')) return;
+    playSwordClash();
     deleteChallenge(id);
   };
 
   const handleAssignTeam = (challengeId: string, teamId: string) => {
     if (!requireAuth('assign sea trials to teams')) return;
+    playWoodClick();
     assignChallengeToTeam(challengeId, teamId);
   };
 
@@ -117,9 +146,45 @@ export const SeaTrialsBoard: React.FC = () => {
         <EventConfigPanel />
       </div>
 
+      {/* Trial Controls: Section Counter & Live Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 pb-1">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+            Davy Back Trials
+          </span>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 shadow-inner">
+            {searchQuery.trim()
+              ? `${filteredChallenges.length} of ${challenges.length} matches`
+              : `${displayedChallenges.length} of ${challenges.length} shown`}
+          </span>
+        </div>
+
+        {/* Search Bar Input */}
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search trials by name, role, or category..."
+            className="w-full pl-9 pr-8 py-2 bg-slate-900/90 border border-slate-700/80 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20 text-slate-100 placeholder-slate-500 text-xs rounded-xl outline-none transition-all"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded-md cursor-pointer"
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Challenges Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
-        {challenges.map((c) => {
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mt-4">
+        {displayedChallenges.map((c) => {
           const isCompleted = !!c.isCompleted;
           const assignedCrew = crews.find(
             cr => cr.assignedChallengeId === c.id || c.assignedCrewId === cr.id
@@ -298,6 +363,46 @@ export const SeaTrialsBoard: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Empty Search Result State */}
+      {filteredChallenges.length === 0 && (
+        <div className="py-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800 mt-6">
+          <p className="font-pirate text-2xl text-amber-300">No Trials Found</p>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            No challenges matched "{searchQuery}". Try searching for another keyword or role.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="mt-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+          >
+            Clear Search
+          </button>
+        </div>
+      )}
+
+      {/* See All / Show Less Toggle Button */}
+      {!searchQuery.trim() && challenges.length > 3 && (
+        <div className="mt-8 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowAll(!showAll)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-slate-800 hover:to-slate-750 border border-amber-500/40 hover:border-amber-400 text-amber-300 font-bold rounded-2xl text-xs sm:text-sm shadow-xl hover:shadow-amber-500/10 active:scale-95 transition-all cursor-pointer"
+          >
+            {showAll ? (
+              <>
+                <ChevronUp className="w-4 h-4 text-amber-400" />
+                <span>Show Less (Top 3 Trials)</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-4 h-4 text-amber-400" />
+                <span>See All Trials ({challenges.length})</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {showCreateModal && (
         <CreateTrialModal onClose={() => setShowCreateModal(false)} />

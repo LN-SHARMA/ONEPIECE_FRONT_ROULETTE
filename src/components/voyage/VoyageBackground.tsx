@@ -71,15 +71,15 @@ export const VoyageBackground: React.FC<VoyageBackgroundProps> = ({ scrollProgre
 
   const opacities = [
     // Scene 1: Sky & Luffy (starts at 1.0, fades out around 0.25)
-    p < 0.15 ? 1 : Math.max(0, 1 - (p - 0.15) / 0.12),
+    p < 0.15 ? 1 : Math.max(0, 1 - (p - 0.15) / 0.14),
     // Scene 2: Islands & Ocean Reveal (peaks around 0.32)
     computeOpacity(0.12, 0.48, p),
     // Scene 3: Thousand Sunny Crew (peaks around 0.52)
-    computeOpacity(0.35, 0.68, p),
+    computeOpacity(0.34, 0.70, p),
     // Scene 4: Whitebeard Moby Dick (peaks around 0.72)
-    computeOpacity(0.55, 0.86, p),
-    // Scene 5: Battlefield Sunset Flag (fades in from 0.75, stays 1.0 at bottom)
-    p > 0.88 ? 1 : Math.max(0, (p - 0.74) / 0.14),
+    computeOpacity(0.54, 0.88, p),
+    // Scene 5: Battlefield Sunset Flag (fades in from 0.70, stays 1.0 all the way to the bottom)
+    p >= 0.82 ? 1 : Math.max(0, (p - 0.68) / 0.14),
   ];
 
   // Ambient Weather & Particle Canvas (Sun glints, rain, embers, lightning)
@@ -211,6 +211,10 @@ export const VoyageBackground: React.FC<VoyageBackgroundProps> = ({ scrollProgre
         // Calculate progressive zoom/scale as camera plunges into each scene
         const depthScale = 1.05 + (p * 0.08) + (idx * 0.02);
 
+        const brightnessFilter = idx >= 3
+          ? 'brightness(1.22) contrast(1.05) saturate(1.15)'
+          : 'brightness(1.06) contrast(1.02)';
+
         return (
           <div
             key={asset.id}
@@ -218,6 +222,7 @@ export const VoyageBackground: React.FC<VoyageBackgroundProps> = ({ scrollProgre
             style={{
               backgroundImage: `url(${asset.src})`,
               opacity,
+              filter: brightnessFilter,
               transform: `scale(${depthScale}) translate(${mouseX * 0.3}px, ${mouseY * 0.3}px)`,
               zIndex: idx + 1,
             }}
@@ -230,17 +235,11 @@ export const VoyageBackground: React.FC<VoyageBackgroundProps> = ({ scrollProgre
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-10" />
       )}
 
-      {/* Subtle Vignette Scrim to ensure WCAG AA contrast for text and cards */}
+      {/* Subtle, non-darkening uniform scrim that keeps background bright and vibrant */}
       <div
-        className="absolute inset-0 z-20 pointer-events-none transition-colors duration-500"
+        className="absolute inset-0 z-20 pointer-events-none"
         style={{
-          background: p < 0.3
-            ? 'linear-gradient(to bottom, rgba(2, 6, 23, 0.25) 0%, rgba(2, 6, 23, 0.45) 100%)'
-            : p < 0.75
-            ? 'linear-gradient(to bottom, rgba(2, 6, 23, 0.35) 0%, rgba(2, 6, 23, 0.6) 100%)'
-            : 'linear-gradient(to bottom, rgba(15, 23, 42, 0.4) 0%, rgba(2, 6, 23, 0.75) 100%)',
-          backdropFilter: 'blur(1.5px)',
-          WebkitBackdropFilter: 'blur(1.5px)',
+          background: 'linear-gradient(to bottom, rgba(2, 6, 23, 0.15) 0%, rgba(2, 6, 23, 0.18) 100%)',
         }}
       />
     </div>

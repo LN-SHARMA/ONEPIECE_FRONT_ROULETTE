@@ -18,7 +18,7 @@ import { ArrowDown, Compass, ChevronDown, MapPin, Sparkles, ArrowRight, Mouse } 
 gsap.registerPlugin(ScrollTrigger);
 
 export const ScrollVoyage: React.FC = () => {
-  const { setViewMode, setSelectedIslandId } = useFleetStore();
+  const { viewMode, setViewMode, setSelectedIslandId } = useFleetStore();
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [scrollProgress, setScrollProgress] = useState(0);
   const lenisRef = useRef<Lenis | null>(null);
@@ -81,10 +81,24 @@ export const ScrollVoyage: React.FC = () => {
   }, []);
 
   const navigateToSection = (sectionId: string) => {
-    const el = document.getElementById(sectionId);
-    if (el && lenisRef.current) {
-      lenisRef.current.scrollTo(el, { offset: -70 });
+    if (viewMode !== 'voyage') {
+      setViewMode('voyage');
     }
+    setTimeout(() => {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        if (lenisRef.current) {
+          try {
+            lenisRef.current.scrollTo(el, { offset: -80 });
+            return;
+          } catch {
+            // fallback below
+          }
+        }
+        const top = el.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
+    }, 20);
   };
 
   const jumpToIslandMap = (islandId: string) => {
@@ -232,28 +246,7 @@ export const ScrollVoyage: React.FC = () => {
             </p>
           </div>
 
-          {/* Story Intro Block */}
-          <div className="max-w-2xl bg-slate-950/75 backdrop-blur-md border border-amber-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl">
-            <span className="text-xs font-bold tracking-[0.2em] uppercase text-amber-400">
-              T H E &nbsp; C R E W
-            </span>
-            <h2 className="font-pirate text-3xl sm:text-5xl text-parchment tracking-wide mt-1">
-              More Than Just Pirates
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-              A family. A crew. A reason to keep going — no matter what. Browse the bounty wall and evaluate your nakama's Haki power.
-            </p>
 
-            <div className="flex items-center gap-3 mt-4">
-              <button
-                onClick={() => jumpToIslandMap('island-recruitment')}
-                className="inline-flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200 font-bold"
-              >
-                <span>Meet the Crew</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
 
           {/* Functional: Wanted Poster Wall (R4) */}
           <WantedPosterWall />
@@ -306,29 +299,34 @@ export const ScrollVoyage: React.FC = () => {
         {/* PANEL 5: BATTLEFIELD SUNSET / ONE PIECE FOREVER */}
         {/* ======================================================== */}
         <section id="scene-battlefield" className="scroll-mt-24 space-y-8">
-          {/* Finale Quote matching Photo 5 */}
-          <div className="text-center py-6">
-            <p className="font-serif italic text-base sm:text-lg text-red-200 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] max-w-xl mx-auto">
-              "Because in the end... it's not just about the destination. It's about the journey."
-            </p>
+          {/* Finale Quote & Calligraphy matching Photo 5 */}
+          <div className="text-center py-10 px-6 sm:px-12 max-w-4xl mx-auto bg-slate-950/85 backdrop-blur-md border border-red-500/40 rounded-3xl shadow-2xl shadow-black/90 relative overflow-hidden my-6">
+            {/* Ambient inner vignette glow */}
+            <div className="absolute inset-0 bg-gradient-to-b from-red-950/40 via-slate-950/70 to-slate-950/90 pointer-events-none" />
 
-            {/* Giant Brush Calligraphy: ONE PIECE FOREVER with Red Stroke Accent */}
-            <div className="my-6">
-              <h2 className="font-pirate text-6xl sm:text-8xl text-white tracking-wider uppercase drop-shadow-[0_8px_25px_rgba(220,38,38,0.8)] italic">
-                ONE PIECE FOREVER
-              </h2>
-              {/* Red brush stroke underline */}
-              <div className="w-48 sm:w-72 h-2 mx-auto bg-gradient-to-r from-red-600 via-red-500 to-red-700 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.9)] transform -rotate-1" />
-            </div>
+            <div className="relative z-10 space-y-4">
+              <p className="font-serif italic text-lg sm:text-xl text-red-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] max-w-xl mx-auto leading-relaxed">
+                "Because in the end... it's not just about the destination. It's about the journey."
+              </p>
 
-            <div className="pt-2">
-              <button
-                onClick={() => navigateToSection('scene-scoreboard')}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-red-600/30 hover:bg-red-600/40 border border-red-500/60 text-white text-xs sm:text-sm font-bold shadow-lg shadow-red-600/20 active:scale-95 transition-all"
-              >
-                <span>(+) Join the Journey</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              {/* Giant Brush Calligraphy: ONE PIECE FOREVER with Red Stroke Accent */}
+              <div className="py-2">
+                <h2 className="font-pirate text-6xl sm:text-8xl text-white tracking-wider uppercase drop-shadow-[0_8px_25px_rgba(220,38,38,0.9)] italic">
+                  ONE PIECE FOREVER
+                </h2>
+                {/* Red brush stroke underline */}
+                <div className="w-48 sm:w-72 h-2.5 mx-auto bg-gradient-to-r from-red-600 via-red-500 to-red-700 rounded-full shadow-[0_0_20px_rgba(220,38,38,1)] transform -rotate-1 mt-1" />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => navigateToSection('scene-scoreboard')}
+                  className="inline-flex items-center gap-2 px-7 py-3 rounded-full bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 border border-red-400 text-white text-sm font-bold shadow-xl shadow-red-900/50 active:scale-95 transition-all cursor-pointer"
+                >
+                  <span>(+) Join the Journey</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -350,10 +348,16 @@ export const ScrollVoyage: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-slate-800 bg-slate-950/95 py-10 px-4 text-center text-xs text-slate-500">
-        <p className="font-pirate text-2xl text-parchment">ONE PIECE FOREVER • GRAND FLEET</p>
-        <p className="mt-1">Continuous cinematic descent from Stratosphere to Battlefield Abyss.</p>
-        <p className="mt-2 text-[10px] text-slate-600 font-mono">Tip: Type Konami Code for Gear 5 celebration!</p>
+      <footer className="relative z-10 border-t border-amber-500/30 bg-slate-950/95 shadow-2xl shadow-black py-10 px-4 text-center">
+        <p className="font-pirate text-3xl text-parchment drop-shadow-md tracking-wider">
+          ONE PIECE FOREVER • GRAND FLEET
+        </p>
+        <p className="text-sm text-slate-300 mt-1 font-medium">
+          Continuous cinematic descent from Stratosphere to Battlefield Abyss.
+        </p>
+        <p className="text-xs text-amber-400/90 font-mono mt-2 font-semibold">
+          Tip: Type Konami Code for Gear 5 celebration!
+        </p>
       </footer>
     </div>
   );

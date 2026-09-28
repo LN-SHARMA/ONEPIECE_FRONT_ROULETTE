@@ -16,7 +16,8 @@ import {
   ChevronDown, 
   Sparkles,
   Crown,
-  Lock
+  Lock,
+  Music
 } from 'lucide-react';
 
 interface VoyageHUDProps {
@@ -26,23 +27,37 @@ interface VoyageHUDProps {
 }
 
 const SCENE_NAMES = [
-  { id: 'scene-east-blue', title: 'Sky Realm', island: 'High Stratosphere Dawn' },
-  { id: 'scene-storm', title: 'Cloud Break', island: 'Grand Line Ocean Reveal' },
-  { id: 'scene-sabaody', title: 'Fleet Waters', island: 'Sabaody Archipelago' },
-  { id: 'scene-foxy', title: "Sea Coliseum", island: "Foxy's Arena Isle" },
-  { id: 'scene-haki', title: 'Whitebeard Tremor', island: 'Moby Dick & Haki Forge' },
-  { id: 'scene-laughtale', title: 'Abyss Battlefield', island: 'Laugh Tale Abyss' },
+  { id: 'scene-sky', title: 'Sky Realm', island: 'High Stratosphere Dawn' },
+  { id: 'scene-islands', title: 'Cloud Break', island: 'Grand Line Ocean Reveal' },
+  { id: 'scene-sunny', title: 'Fleet Waters', island: 'Sabaody Archipelago' },
+  { id: 'scene-whitebeard', title: 'Sea Coliseum', island: "Foxy's Arena Isle" },
+  { id: 'scene-battlefield', title: 'Whitebeard Tremor', island: 'Whitebeard Battlefield' },
+  { id: 'scene-scoreboard', title: 'Abyss Battlefield', island: 'Laugh Tale Abyss' },
 ];
+
+import { useAudioStore } from '../../store/audioStore';
 
 export const VoyageHUD: React.FC<VoyageHUDProps> = ({
   currentSceneIndex,
   scrollProgress,
   onNavigateSection,
 }) => {
-  const { viewMode, setViewMode, gameState } = useFleetStore();
+  const { viewMode, setViewMode, gameState, showToast } = useFleetStore();
   const { user, isAuthenticated, openLoginModal, logout } = useAuthStore();
-  const [isMuted, setIsMuted] = useState(true);
+  const { isBgmMuted, toggleBgm } = useAudioStore();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+  const handleToggleAudio = () => {
+    const turningOn = isBgmMuted;
+    toggleBgm();
+    showToast({
+      title: turningOn ? "🎵 Binks' Sake (ビンクスの酒) Playing!" : "🔇 Binks' Sake Muted",
+      message: turningOn
+        ? "Yo-hohoho, Yo-ho-ho-ho... Delivering Binks' brew across the Grand Line! Button sound effects remain active."
+        : "Sea shanty paused. Click Lock or Assemble to hear sword clashes and cannon fire anytime.",
+      type: turningOn ? 'haki' : 'info',
+    });
+  };
 
   const currentScene = SCENE_NAMES[Math.min(currentSceneIndex, SCENE_NAMES.length - 1)];
 
@@ -74,8 +89,11 @@ export const VoyageHUD: React.FC<VoyageHUDProps> = ({
               return (
                 <button
                   key={s.id}
-                  onClick={() => onNavigateSection?.(s.id)}
-                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-all duration-200 ${
+                  onClick={() => {
+                    if (viewMode !== 'voyage') setViewMode('voyage');
+                    onNavigateSection?.(s.id);
+                  }}
+                  className={`px-3 py-1 text-xs rounded-lg font-medium transition-all duration-200 cursor-pointer ${
                     isActive
                       ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/30 scale-105'
                       : 'text-slate-300 hover:text-amber-300 hover:bg-slate-800/80'
@@ -128,27 +146,27 @@ export const VoyageHUD: React.FC<VoyageHUDProps> = ({
               <button
                 type="button"
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="flex items-center gap-2 py-1 px-2 rounded-xl bg-slate-900 border border-amber-500/50 hover:border-amber-400 text-slate-100 text-xs font-bold transition-all shadow-md cursor-pointer select-none"
+                className="flex items-center gap-2.5 py-1 px-2.5 sm:px-3 rounded-2xl bg-slate-900 border border-amber-500/50 hover:border-amber-400 text-slate-100 text-xs font-bold transition-all shadow-md hover:shadow-amber-500/20 cursor-pointer select-none"
                 title={`${user.name} (${user.role}) - Click for profile`}
               >
-                <div className="w-6 h-6 rounded-lg bg-slate-950 flex items-center justify-center overflow-hidden border border-slate-700">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-950 flex items-center justify-center overflow-hidden border-2 border-amber-500/60 shadow-md shadow-amber-500/20 shrink-0">
                   <JollyRogerAvatar
                     hatType={user.avatar}
                     symbol={user.hakiType === 'Conqueror' ? 'flames' : 'crossbones'}
                     baseColor="#09090b"
                     accentColor="#f59e0b"
-                    size={22}
+                    size={34}
                   />
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-[11px] font-pirate text-amber-300 leading-tight truncate max-w-[85px]">
+                  <span className="text-xs sm:text-sm font-pirate text-amber-300 leading-tight truncate max-w-[95px]">
                     {user.name.split(' ')[0]}
                   </span>
-                  <span className="text-[9px] text-slate-400 -mt-0.5 leading-tight truncate max-w-[85px]">
+                  <span className="text-[10px] text-slate-400 -mt-0.5 leading-tight truncate max-w-[95px]">
                     {user.role.split(' ')[0]}
                   </span>
                 </div>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-amber-400/80" />
               </button>
 
               {/* User Dropdown Profile Menu */}
@@ -236,23 +254,49 @@ export const VoyageHUD: React.FC<VoyageHUDProps> = ({
               <button
                 type="button"
                 onClick={() => openLoginModal()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-xl text-xs sm:text-sm shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-xl text-xs sm:text-sm shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
                 title="Sign in with demo data or custom credentials"
               >
-                <LogIn className="w-3.5 h-3.5" />
+                <div className="w-7 h-7 rounded-lg bg-slate-950/20 flex items-center justify-center shrink-0">
+                  <Crown className="w-4 h-4 text-slate-950" />
+                </div>
                 <span>⚓ Login</span>
               </button>
             </div>
           )}
 
-          {/* Audio toggle button (Muted by default) */}
+          {/* Grand Line Sea Shanty: Binks' Sake Audio toggle */}
           <button
-            onClick={() => setIsMuted(!isMuted)}
-            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
-            title={isMuted ? 'Ambient Ocean Audio: Off (Click to activate)' : 'Ambient Ocean Audio: On'}
-            aria-label="Toggle ambient sound"
+            type="button"
+            onClick={handleToggleAudio}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+              !isBgmMuted
+                ? 'bg-amber-500/25 border-amber-500/60 text-amber-300 shadow-md shadow-amber-500/25 scale-105'
+                : 'bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-400 hover:text-slate-200'
+            }`}
+            title={isBgmMuted ? "Binks' Sake (ビンクスの酒): Off (Click to play pirate sea shanty)" : "Binks' Sake: Playing (Click to mute)"}
+            aria-label="Toggle Binks' Sake pirate audio"
           >
-            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-amber-400" />}
+            {isBgmMuted ? (
+              <div className="flex items-center gap-1">
+                <Music className="w-3.5 h-3.5 text-slate-500" />
+                <VolumeX className="w-3.5 h-3.5" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <Music className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+                <Volume2 className="w-4 h-4 text-amber-400 animate-pulse" />
+                <div className="hidden xl:flex items-end gap-0.5 h-3">
+                  <span className="w-0.5 bg-amber-400 animate-pulse h-2.5" />
+                  <span className="w-0.5 bg-amber-300 animate-pulse h-1.5" />
+                  <span className="w-0.5 bg-amber-400 animate-pulse h-3" />
+                  <span className="w-0.5 bg-amber-300 animate-pulse h-2" />
+                </div>
+              </div>
+            )}
+            <span className="text-[11px] font-bold uppercase tracking-wider hidden sm:inline">
+              {!isBgmMuted ? "Binks' Sake: ON" : "Binks' Sake: OFF"}
+            </span>
           </button>
         </div>
       </div>
