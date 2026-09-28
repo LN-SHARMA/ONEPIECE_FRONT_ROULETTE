@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFleetStore } from '../../store/fleetStore';
+import { useAuthStore } from '../../store/authStore';
 import { EventConfigPanel } from './EventConfigPanel';
 import { CreateTrialModal } from './CreateTrialModal';
 import { evaluateChallengeFit } from '../../services/teamEngine';
@@ -13,7 +14,9 @@ import {
   ChevronDown, 
   Check, 
   Sparkles,
-  Users
+  Users,
+  Lock,
+  LogIn
 } from 'lucide-react';
 
 export const SeaTrialsBoard: React.FC = () => {
@@ -26,6 +29,7 @@ export const SeaTrialsBoard: React.FC = () => {
     toggleChallengeCompletion,
     assembleFleet 
   } = useFleetStore();
+  const { isAuthenticated, requireAuth, openLoginModal } = useAuthStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -33,6 +37,26 @@ export const SeaTrialsBoard: React.FC = () => {
     () => new Map(participants.map(p => [p.id, p])),
     [participants]
   );
+
+  const handleCreateTrialClick = () => {
+    if (!requireAuth('sanction new sea trials')) return;
+    setShowCreateModal(true);
+  };
+
+  const handleToggleCompletion = (id: string) => {
+    if (!requireAuth('update sea trial completion status')) return;
+    toggleChallengeCompletion(id);
+  };
+
+  const handleDeleteChallenge = (id: string) => {
+    if (!requireAuth('delete sea trials')) return;
+    deleteChallenge(id);
+  };
+
+  const handleAssignTeam = (challengeId: string, teamId: string) => {
+    if (!requireAuth('assign sea trials to teams')) return;
+    assignChallengeToTeam(challengeId, teamId);
+  };
 
   return (
     <div className="w-full glass-panel rounded-3xl p-6 sm:p-8 border border-orange-500/30 text-slate-100 shadow-2xl">
@@ -51,13 +75,42 @@ export const SeaTrialsBoard: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-pirate text-xl uppercase tracking-wider rounded-xl shadow-lg shadow-orange-600/20 active:scale-95 transition-all self-start md:self-auto cursor-pointer"
+          onClick={handleCreateTrialClick}
+          className={`flex items-center gap-2 px-4 py-2.5 text-white font-pirate text-xl uppercase tracking-wider rounded-xl shadow-lg active:scale-95 transition-all self-start md:self-auto cursor-pointer ${
+            isAuthenticated
+              ? 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 shadow-orange-600/20'
+              : 'bg-gradient-to-r from-orange-700/80 to-amber-700/80 hover:from-orange-600 hover:to-amber-600 border border-amber-500/40 text-amber-200'
+          }`}
         >
-          <PlusCircle className="w-5 h-5 text-yellow-300" />
-          <span>Sanction New Trial</span>
+          {isAuthenticated ? (
+            <PlusCircle className="w-5 h-5 text-yellow-300" />
+          ) : (
+            <Lock className="w-5 h-5 text-amber-300" />
+          )}
+          <span>{isAuthenticated ? 'Sanction New Trial' : 'Sign In to Sanction Trial'}</span>
         </button>
       </div>
+
+      {/* Read-Only Coliseum Notice */}
+      {!isAuthenticated && (
+        <div className="mt-4 p-4 rounded-2xl bg-amber-950/70 border border-amber-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5 text-amber-200">
+            <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <strong className="text-amber-300 block">Coliseum Status: Read-Only (Observation Mode)</strong>
+              <span>Inspection of active trials and team weights is enabled. Sign in to sanction new trials, tick completion, or assign crews.</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => openLoginModal('sanction and update trials')}
+            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shrink-0 self-start sm:self-auto cursor-pointer shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Sign In (Demo)</span>
+          </button>
+        </div>
+      )}
 
       {/* Event Config Panel (Crew Size & Crew Count) */}
       <div className="my-6">
@@ -102,13 +155,19 @@ export const SeaTrialsBoard: React.FC = () => {
                     {/* Tick-Check Completion Button */}
                     <button
                       type="button"
-                      onClick={() => toggleChallengeCompletion(c.id)}
+                      onClick={() => handleToggleCompletion(c.id)}
                       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer border ${
                         isCompleted
                           ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/50 shadow-emerald-500/20'
                           : 'bg-slate-800/90 hover:bg-slate-750 text-slate-300 hover:text-white border-slate-700 hover:border-amber-500/50'
                       }`}
-                      title={isCompleted ? 'Click to uncheck / mark incomplete' : 'Click to tick-check challenge as completed'}
+                      title={
+                        !isAuthenticated
+                          ? 'Read-Only Mode: Sign in to tick-check completion'
+                          : isCompleted
+                          ? 'Click to uncheck / mark incomplete'
+                          : 'Click to tick-check challenge as completed'
+                      }
                     >
                       {isCompleted ? (
                         <>
@@ -124,9 +183,9 @@ export const SeaTrialsBoard: React.FC = () => {
                     </button>
 
                     <button
-                      onClick={() => deleteChallenge(c.id)}
+                      onClick={() => handleDeleteChallenge(c.id)}
                       className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity cursor-pointer"
-                      title="Remove Challenge"
+                      title={!isAuthenticated ? 'Sign in to delete' : 'Remove Challenge'}
                       aria-label={`Remove challenge ${c.name}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -193,7 +252,7 @@ export const SeaTrialsBoard: React.FC = () => {
                   <div className="relative flex-1">
                     <select
                       value={assignedCrew?.id || ''}
-                      onChange={(e) => assignChallengeToTeam(c.id, e.target.value)}
+                      onChange={(e) => handleAssignTeam(c.id, e.target.value)}
                       className={`w-full pl-3 pr-8 py-2 rounded-xl text-xs font-bold border transition-all outline-none cursor-pointer appearance-none ${
                         assignedCrew
                           ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 hover:bg-amber-500/25 shadow-sm'
@@ -215,7 +274,7 @@ export const SeaTrialsBoard: React.FC = () => {
                   {assignedCrew && (
                     <button
                       type="button"
-                      onClick={() => assignChallengeToTeam(c.id, '')}
+                      onClick={() => handleAssignTeam(c.id, '')}
                       className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-red-950/60 border border-slate-700 hover:border-red-500/40 text-slate-400 hover:text-red-300 text-xs font-bold transition-colors cursor-pointer"
                       title="Unassign team from this challenge"
                     >

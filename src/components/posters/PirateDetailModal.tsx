@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Participant, PirateRole, ALL_ROLES } from '../../types';
 import { useFleetStore } from '../../store/fleetStore';
+import { useAuthStore } from '../../store/authStore';
 import { deriveHaki, SKILL_AXES } from '../../services/teamEngine';
 import { JollyRogerAvatar, DevilFruitSwirlIcon } from '../common/SvgIcons';
-import { X, Trash2, Edit3, Check, Eye, Shield, Zap, Sparkles } from 'lucide-react';
+import { X, Trash2, Edit3, Check, Eye, Shield, Zap, Sparkles, Lock } from 'lucide-react';
 
 interface PirateDetailModalProps {
   participant: Participant;
@@ -12,6 +13,7 @@ interface PirateDetailModalProps {
 
 export const PirateDetailModal: React.FC<PirateDetailModalProps> = ({ participant, onClose }) => {
   const { updateParticipant, deleteParticipant } = useFleetStore();
+  const { isAuthenticated, requireAuth } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(participant.name);
   const [editEpithet, setEditEpithet] = useState(participant.epithet);
@@ -28,7 +30,13 @@ export const PirateDetailModal: React.FC<PirateDetailModalProps> = ({ participan
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  const handleStartEdit = () => {
+    if (!requireAuth('edit pirate records and bounties')) return;
+    setIsEditing(true);
+  };
+
   const handleSave = async () => {
+    if (!requireAuth('save pirate records and bounties')) return;
     await updateParticipant({
       ...participant,
       name: editName,
@@ -40,6 +48,7 @@ export const PirateDetailModal: React.FC<PirateDetailModalProps> = ({ participan
   };
 
   const handleDelete = async () => {
+    if (!requireAuth('discharge pirates from the Grand Fleet')) return;
     if (window.confirm(`Release ${participant.name} from the Grand Fleet archives?`)) {
       await deleteParticipant(participant.id);
       onClose();
@@ -220,15 +229,19 @@ export const PirateDetailModal: React.FC<PirateDetailModalProps> = ({ participan
                 <>
                   <button
                     onClick={handleDelete}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-500/40 text-red-300 text-xs font-semibold"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-500/40 text-red-300 text-xs font-semibold cursor-pointer"
+                    title={!isAuthenticated ? 'Sign in to discharge' : 'Discharge pirate'}
                   >
-                    <Trash2 className="w-3.5 h-3.5" /> Discharge
+                    {isAuthenticated ? <Trash2 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                    <span>Discharge</span>
                   </button>
                   <button
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-semibold"
+                    onClick={handleStartEdit}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-semibold cursor-pointer"
+                    title={!isAuthenticated ? 'Sign in to edit record' : 'Edit record'}
                   >
-                    <Edit3 className="w-3.5 h-3.5" /> Edit Record
+                    {isAuthenticated ? <Edit3 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                    <span>Edit Record</span>
                   </button>
                 </>
               )}

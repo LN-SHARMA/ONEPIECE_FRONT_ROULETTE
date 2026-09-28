@@ -2,6 +2,7 @@ import {
   Participant, 
   Challenge, 
   EventConfig, 
+  GrandFleetSkillConfig,
   Crew, 
   CrewMember, 
   StructuredWarning, 
@@ -496,4 +497,279 @@ export function generateTeams(
     balanceScore: finalBalanceScore,
     conquerorWinnerId,
   };
+}
+
+export interface OptimizedFleetResult extends EngineResult {
+  initialFitScore: number;
+  finalFitScore: number;
+  optimizationApplied: boolean;
+  optimizedSeed: number;
+}
+
+/**
+ * Advanced Grand Fleet Generation & Optimization
+ * Matches candidates on user-selected priority skills and automatically optimizes
+ * fleet divisions if the current fit criteria is less than the target threshold.
+ */
+export function generateOptimizedGrandFleet(
+  participants: Participant[],
+  challenges: Challenge[],
+  skillConfig: GrandFleetSkillConfig,
+  baseConfig: EventConfig,
+  existingCrews: Crew[] = []
+): OptimizedFleetResult {
+  const targetThreshold = skillConfig.targetFitThreshold || 80;
+  const participantsMap = new Map<string, Participant>(participants.map(p => [p.id, p]));
+
+  // Calculate fleet average fit score
+  const getFleetAverageFit = (crewsList: Crew[]): number => {
+    if (!crewsList || crewsList.length === 0) return 0;
+    const total = crewsList.reduce((sum, c) => sum + (c.fitScore || 0), 0);
+    return Math.round(total / crewsList.length);
+  };
+
+  // Helper to re-match challenges to maximize fit
+  const optimizeChallengeAssignments = (crewsList: Crew[]): Crew[] => {
+    const unassignedChallenges = [...challenges];
+    return crewsList.map(crew => {
+      if (crew.assignedChallengeId) {
+        const existingCh = challenges.find(c => c.id === crew.assignedChallengeId);
+        return {
+          ...crew,
+          fitScore: existingCh ? evaluateChallengeFit(crew, existingCh, participantsMap) : crew.fitScore || 0,
+        };
+      }
+      if (unassignedChallenges.length === 0) return crew;
+      let bestFit = -1;
+      let bestIdx = 0;
+      for (let i = 0; i < unassignedChallenges.length; i++) {
+        const fit = evaluateChallengeFit(crew, unassignedChallenges[i], participantsMap);
+        if (fit > bestFit) {
+          bestFit = fit;
+          bestIdx = i;
+        }
+      }
+      const matched = unassignedChallenges.splice(bestIdx, 1)[0];
+      return {
+        ...crew,
+        assignedChallengeId: matched.id,
+        fitScore: bestFit,
+      };
+    });
+  };
+
+  // 1. Initial Generation using primary seed with skill priorities
+  const initialConfig: EventConfig = {
+    ...baseConfig,
+    crewSize: skillConfig.crewSize || baseConfig.crewSize || 4,
+    crewCount: skillConfig.crewCount || baseConfig.crewCount,
+    seed: baseConfig.seed || 42,
+    selectedSkills: skillConfig.selectedSkills,
+  };
+
+  // Rank candidate pool by chosen skills if specified
+  const prioritizedParticipants = [...participants];
+  if (skillConfig.selectedSkills && skillConfig.selectedSkills.length > 0) {
+    const weights = skillConfig.skillWeights || {};
+    prioritizedParticipants.sort((a, b) => {
+      const scoreA = skillConfig.selectedSkills.reduce((sum, s) => sum + (a.skills[s] || 0) * (weights[s] || 1), 0);
+      const scoreB = skillConfig.selectedSkills.reduce((sum, s) => sum + (b.skills[s] || 0) * (weights[s] || 1), 0);
+      return scoreB - scoreA;
+    });
+  }
+
+  let bestResult = generateTeams(prioritizedParticipants, challenges, initialConfig, existingCrews);
+  bestResult.crews = optimizeChallengeAssignments(bestResult.crews);
+
+  const initialFit = getFleetAverageFit(bestResult.crews);
+  let bestFit = initialFit;
+  let bestSeed = initialConfig.seed;
+  let optimizationApplied = false;
+
+  // 2. If fit is less than target threshold, run automatic iterative optimization
+  if (initialFit < targetThreshold && skillConfig.autoOptimizeIfLowFit !== false) {
+    optimizationApplied = true;
+
+    // Phase A: Seed Exploration across candidate distributions
+    const testSeeds = [
+      initialConfig.seed + 13,
+      initialConfig.seed + 37,
+      initialConfig.seed + 99,
+      initialConfig.seed + 149,
+      initialConfig.seed + 257,
+      initialConfig.seed + 389,
+      initialConfig.seed + 521,
+      initialConfig.seed + 733,
+      initialConfig.seed + 997,
+      initialConfig.seed + 1234,
+      initialConfig.seed + 2048,
+    ];
+
+    for (const testSeed of testSeeds) {
+      const candidateResult = generateTeams(
+        prioritizedParticipants,
+        challenges,
+        { ...initialConfig, seed: testSeed },
+        existingCrews
+      );
+      candidateResult.crews = optimizeChallengeAssignments(candidateResult.crews);
+      const candFit = getFleetAverageFit(candidateResult.crews);
+
+      if (candFit > bestFit) {
+        bestFit = candFit;
+        bestResult = candidateResult;
+        bestSeed = testSeed;
+        if (bestFit >= targetThreshold) break;
+      }
+    }
+
+    // Phase B: Local 2-opt pairwise hill-climbing member swaps between divisions
+    let improved = true;
+    let passes = 0;
+    while (improved && passes < 3 && bestFit < targetThreshold) {
+      improved = false;
+      passes++;
+
+      const currentCrews = bestResult.crews.map(c => ({
+        ...c,
+        members: [...c.members],
+      }));
+
+      for (let i = 0; i < currentCrews.length; i++) {
+        for (let j = i + 1; j < currentCrews.length; j++) {
+          const crewA = currentCrews[i];
+          const crewB = currentCrews[j];
+          if (crewA.isLocked || crewB.isLocked) continue;
+
+          for (let ma = 0; ma < crewA.members.length; ma++) {
+            for (let mb = 0; mb < crewB.members.length; mb++) {
+              if (crewA.members[ma].isPinned || crewB.members[mb].isPinned) continue;
+
+              // Test swap
+              const tempA = crewA.members[ma];
+              const tempB = crewB.members[mb];
+              crewA.members[ma] = { ...tempA, participantId: tempB.participantId };
+              crewB.members[mb] = { ...tempB, participantId: tempA.participantId };
+
+              // Recompute axis scores and fits
+              crewA.axisScores = computeCrewAxisScores(crewA.members, participantsMap);
+              crewB.axisScores = computeCrewAxisScores(crewB.members, participantsMap);
+
+              const chA = challenges.find(c => c.id === crewA.assignedChallengeId);
+              const chB = challenges.find(c => c.id === crewB.assignedChallengeId);
+
+              const fitA = chA ? evaluateChallengeFit(crewA, chA, participantsMap) : 80;
+              const fitB = chB ? evaluateChallengeFit(crewB, chB, participantsMap) : 80;
+
+              crewA.fitScore = fitA;
+              crewB.fitScore = fitB;
+
+              const testAvgFit = getFleetAverageFit(currentCrews);
+              if (testAvgFit > bestFit) {
+                bestFit = testAvgFit;
+                bestResult = {
+                  ...bestResult,
+                  crews: currentCrews,
+                  balanceScore: calculateBalanceScore(currentCrews),
+                };
+                improved = true;
+                break;
+              } else {
+                // Revert swap
+                crewA.members[ma] = tempA;
+                crewB.members[mb] = tempB;
+                crewA.axisScores = computeCrewAxisScores(crewA.members, participantsMap);
+                crewB.axisScores = computeCrewAxisScores(crewB.members, participantsMap);
+              }
+            }
+            if (improved) break;
+          }
+          if (improved) break;
+        }
+      }
+    }
+  }
+
+  // Update fleetName on crews if provided
+  if (skillConfig.fleetName && skillConfig.fleetName.trim()) {
+    const customPrefix = skillConfig.fleetName.trim();
+    bestResult.crews = bestResult.crews.map((c, idx) => ({
+      ...c,
+      name: `${customPrefix} Division #${idx + 1}`,
+    }));
+  }
+
+  return {
+    ...bestResult,
+    initialFitScore: initialFit,
+    finalFitScore: bestFit,
+    optimizationApplied,
+    optimizedSeed: bestSeed,
+  };
+}
+
+/**
+ * Creates a single targeted Fleet Division using available candidates and prioritized skills.
+ */
+export function createSkillBasedDivision(
+  divisionName: string,
+  shipName: string,
+  selectedSkills: (keyof SkillSet)[],
+  size: number,
+  availableParticipants: Participant[],
+  challenges: Challenge[]
+): Crew | null {
+  if (!availableParticipants || availableParticipants.length === 0) return null;
+
+  const participantsMap = new Map(availableParticipants.map(p => [p.id, p]));
+
+  // Sort candidates by combined proficiency in selected skills
+  const sortedCandidates = [...availableParticipants].sort((a, b) => {
+    const scoreA = selectedSkills.reduce((sum, s) => sum + (a.skills[s] || 0), 0);
+    const scoreB = selectedSkills.reduce((sum, s) => sum + (b.skills[s] || 0), 0);
+    return scoreB - scoreA;
+  });
+
+  const chosenCandidates = sortedCandidates.slice(0, size);
+  const members: CrewMember[] = chosenCandidates.map((p, idx) => ({
+    participantId: p.id,
+    assignedRole: idx === 0 ? (p.primaryRole || 'Tech Lead / Architect') : p.primaryRole,
+    isPinned: false,
+  }));
+
+  const axisScores = computeCrewAxisScores(members, participantsMap);
+
+  const newCrew: Crew = {
+    id: `crew-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    name: divisionName || `Grand Fleet Division #${Date.now().toString().slice(-4)}`,
+    shipName: shipName || 'Thousand Sunny Refit',
+    jollyRogerSvgSeed: `jr-custom-${Date.now()}`,
+    members,
+    isLocked: false,
+    axisScores,
+    hasConqueror: members.some(m => {
+      const p = participantsMap.get(m.participantId);
+      if (!p) return false;
+      const haki = deriveHaki(p.skills, p.primaryRole, p.secondaryRole);
+      return haki.conqueror >= 80;
+    }),
+    warnings: [],
+  };
+
+  // Match best challenge
+  if (challenges.length > 0) {
+    let bestFit = -1;
+    let bestChId = challenges[0].id;
+    for (const ch of challenges) {
+      const fit = evaluateChallengeFit(newCrew, ch, participantsMap);
+      if (fit > bestFit) {
+        bestFit = fit;
+        bestChId = ch.id;
+      }
+    }
+    newCrew.assignedChallengeId = bestChId;
+    newCrew.fitScore = bestFit;
+  }
+
+  return newCrew;
 }

@@ -5,6 +5,7 @@ import { GrandLineMap } from './components/map/GrandLineMap';
 import { DenDenToast } from './components/common/DenDenToast';
 import { HakiShockwave } from './components/common/HakiShockwave';
 import { EasterEggListener } from './components/common/EasterEggListener';
+import { LoginModal } from './components/auth/LoginModal';
 
 export const App: React.FC = () => {
   const { init, viewMode, isLoading } = useFleetStore();
@@ -31,6 +32,7 @@ export const App: React.FC = () => {
       <DenDenToast />
       <HakiShockwave />
       <EasterEggListener />
+      <LoginModal />
     </div>
   );
 };

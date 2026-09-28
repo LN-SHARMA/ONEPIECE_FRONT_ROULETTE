@@ -43,6 +43,7 @@ export const ChallengeManager: React.FC = () => {
     await addChallenge({
       name: name.trim(),
       description: description.trim() || 'A new challenge',
+      category: 'Combat',
       requiredRoles: selectedRoles,
       requiredSkills,
     });

@@ -181,6 +181,18 @@ export interface EventConfig {
   seed: number;
   lockedCrewIds: string[];
   conquerorWinnerId?: string;
+  selectedSkills?: (keyof SkillSet)[];
+  targetFitThreshold?: number;
+}
+
+export interface GrandFleetSkillConfig {
+  fleetName?: string;
+  crewSize?: number;
+  crewCount?: number;
+  selectedSkills: (keyof SkillSet)[];
+  skillWeights?: Partial<Record<keyof SkillSet, number>>;
+  targetFitThreshold: number;
+  autoOptimizeIfLowFit?: boolean;
 }
 
 export interface FleetState {
@@ -210,3 +222,17 @@ export interface GameState {
 }
 
 export type ViewMode = 'voyage' | 'map';
+
+export const SKILL_META = CSE_SKILL_META;
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'Fleet Admiral' | 'First Mate' | 'Chief Navigator' | 'Surgeon General' | 'Grand Architect' | 'Pirate Captain' | 'Crew Commander';
+  title: string;
+  bounty: number;
+  avatar: JollyRogerStyle['hatType'];
+  hakiType: 'Conqueror' | 'Armament' | 'Observation';
+  fleetDivision?: string;
+}

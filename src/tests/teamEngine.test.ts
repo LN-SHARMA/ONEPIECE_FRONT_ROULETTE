@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { generateTeams, deriveHaki, calculateBalanceScore } from '../services/teamEngine';
+import { 
+  generateTeams, 
+  deriveHaki, 
+  calculateBalanceScore, 
+  generateOptimizedGrandFleet, 
+  createSkillBasedDivision 
+} from '../services/teamEngine';
 import { INITIAL_PARTICIPANTS, INITIAL_CHALLENGES } from '../data/seedData';
 import { EventConfig, Participant, Challenge, Crew } from '../types';
 
@@ -135,5 +141,53 @@ describe('teamEngine balancing & invariants', () => {
     expect(haki.armament).toBeGreaterThan(0);
     expect(haki.conqueror).toBeGreaterThan(0);
     expect(haki.conqueror).toBeLessThanOrEqual(100);
+  });
+
+  it('generateOptimizedGrandFleet creates fleet with chosen skills and auto-optimizes fit', () => {
+    const skillConfig = {
+      fleetName: 'Custom Armada',
+      selectedSkills: ['combat', 'engineering'] as const,
+      targetFitThreshold: 85,
+      autoOptimizeIfLowFit: true,
+      crewSize: 4,
+    };
+
+    const result = generateOptimizedGrandFleet(
+      INITIAL_PARTICIPANTS,
+      INITIAL_CHALLENGES,
+      skillConfig as any,
+      baseConfig
+    );
+
+    expect(result.crews.length).toBeGreaterThan(0);
+    expect(result.crews[0].name).toContain('Custom Armada');
+    expect(result.finalFitScore).toBeGreaterThanOrEqual(result.initialFitScore);
+    expect(result.stowaways.length).toBeDefined();
+
+    // Verify all participants are unique
+    const seen = new Set<string>();
+    for (const c of result.crews) {
+      for (const m of c.members) {
+        expect(seen.has(m.participantId)).toBe(false);
+        seen.add(m.participantId);
+      }
+    }
+  });
+
+  it('createSkillBasedDivision commissions division matching chosen skills', () => {
+    const division = createSkillBasedDivision(
+      'Special Cyber Recon',
+      'Thousand Sunny Mirage',
+      ['wits', 'engineering'],
+      4,
+      INITIAL_PARTICIPANTS,
+      INITIAL_CHALLENGES
+    );
+
+    expect(division).toBeDefined();
+    expect(division?.name).toBe('Special Cyber Recon');
+    expect(division?.members.length).toBe(4);
+    expect(division?.axisScores.wits).toBeGreaterThan(0);
+    expect(division?.axisScores.engineering).toBeGreaterThan(0);
   });
 });

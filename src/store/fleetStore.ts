@@ -4,14 +4,26 @@ import {
   Challenge, 
   Crew, 
   EventConfig, 
+  GrandFleetSkillConfig,
+  SkillSet,
   FleetState, 
   GameState, 
   ViewMode, 
   PirateRole 
 } from '../types';
 import { api } from '../services/api';
-import { generateTeams, deriveHaki } from '../services/teamEngine';
+import { generateTeams, deriveHaki, generateOptimizedGrandFleet, createSkillBasedDivision } from '../services/teamEngine';
 import { INITIAL_PARTICIPANTS, INITIAL_CHALLENGES } from '../data/seedData';
+import { useAuthStore } from './authStore';
+
+const ensureAuthenticated = (actionName: string): boolean => {
+  const auth = useAuthStore.getState();
+  if (!auth.isAuthenticated) {
+    auth.requireAuth(actionName);
+    return false;
+  }
+  return true;
+};
 
 export interface DenDenToast {
   id: string;
@@ -56,6 +68,11 @@ interface FleetStore extends FleetState {
   swapMembers: (crewAId: string, memberAId: string, crewBId: string, memberBId: string) => void;
   assignChallengeToCrew: (crewId: string, challengeId: string) => void;
   resetAll: () => Promise<void>;
+
+  // Grand Fleet Skill-Based Creation & Auto-Optimization
+  createGrandFleetWithSkills: (config: GrandFleetSkillConfig) => Promise<{ initialFit: number; finalFit: number; optimizationApplied: boolean }>;
+  autoOptimizeGrandFleet: (targetThreshold?: number) => Promise<{ initialFit: number; finalFit: number; improvement: number }>;
+  addCustomFleetDivision: (name: string, shipName: string, skills: (keyof SkillSet)[], size: number) => Promise<void>;
 
   // Game/Gamification actions
   addBerries: (amount: number) => void;
@@ -151,6 +168,8 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   setHakiVfx: (vfx) => set({ hakiVfxTrigger: vfx }),
 
   addParticipant: async (pData) => {
+    if (!ensureAuthenticated('enlist new recruits into the fleet')) return;
+
     // Bounty auto-calculation formula based on skill sum and devil fruit
     const skillSum = Object.values(pData.skills).reduce((a, b) => a + b, 0);
     const fruitMultiplier = pData.devilFruit === 'Mythical Zoan' ? 2.5 : pData.devilFruit === 'Logia' ? 2.0 : pData.devilFruit === 'Paramecia' ? 1.4 : pData.devilFruit === 'Zoan' ? 1.3 : 1.0;
@@ -174,6 +193,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   updateParticipant: async (participant) => {
+    if (!ensureAuthenticated('update pirate records')) return;
     const updated = await api.updateParticipant(participant);
     set({ participants: updated });
     get().showToast({
@@ -184,6 +204,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   deleteParticipant: async (id) => {
+    if (!ensureAuthenticated('discharge pirates from fleet')) return;
     const updated = await api.deleteParticipant(id);
     set({ participants: updated });
     get().showToast({
@@ -194,6 +215,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   addChallenge: async (cData) => {
+    if (!ensureAuthenticated('sanction new sea trials')) return;
     const newChallenge: Challenge = {
       ...cData,
       id: `c-${Date.now()}`,
@@ -209,11 +231,13 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   deleteChallenge: async (id) => {
+    if (!ensureAuthenticated('delete sea trials')) return;
     const updated = await api.deleteChallenge(id);
     set({ challenges: updated });
   },
 
   updateConfig: (patch) => {
+    if (!ensureAuthenticated('modify event configuration')) return;
     set((state) => {
       const newConfig = { ...state.eventConfig, ...patch };
       return { eventConfig: newConfig };
@@ -221,6 +245,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   assembleFleet: async (forceReshuffle = false) => {
+    if (!ensureAuthenticated('assemble or reshuffle the fleet')) return;
     set({ isGenerating: true });
     
     // Trigger Haki visual effect
@@ -283,6 +308,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   toggleCrewLock: (crewId) => {
+    if (!ensureAuthenticated('lock or unlock fleet divisions')) return;
     set((state) => {
       const crews = state.crews.map(c => c.id === crewId ? { ...c, isLocked: !c.isLocked } : c);
       const lockedCrewIds = crews.filter(c => c.isLocked).map(c => c.id);
@@ -294,6 +320,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   toggleMemberPin: (crewId, participantId) => {
+    if (!ensureAuthenticated('pin or unpin crew members')) return;
     set((state) => {
       const crews = state.crews.map(c => {
         if (c.id !== crewId) return c;
@@ -307,6 +334,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   swapMembers: (crewAId, memberAId, crewBId, memberBId) => {
+    if (!ensureAuthenticated('swap crew members between divisions')) return;
     set((state) => {
       const crewA = state.crews.find(c => c.id === crewAId);
       const crewB = state.crews.find(c => c.id === crewBId);
@@ -337,6 +365,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   toggleChallengeCompletion: async (challengeId: string) => {
+    if (!ensureAuthenticated('update sea trial completion status')) return;
     const currentChallenges = get().challenges;
     const target = currentChallenges.find(c => c.id === challengeId);
     if (!target) return;
@@ -367,6 +396,7 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   },
 
   assignChallengeToTeam: async (challengeId: string, crewId: string) => {
+    if (!ensureAuthenticated('assign sea trials to teams')) return;
     const currentChallenges = get().challenges;
     const currentCrews = get().crews;
     const targetChallenge = currentChallenges.find(c => c.id === challengeId);
@@ -397,6 +427,8 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
     set({ crews: updatedCrews, challenges: updatedChallenges });
     await api.saveChallenges(updatedChallenges);
     await api.saveFleetState({
+      participants: get().participants,
+      challenges: updatedChallenges,
       crews: updatedCrews,
       stowaways: get().stowaways,
       eventConfig: get().eventConfig,
@@ -422,7 +454,194 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
     get().assignChallengeToTeam(challengeId, crewId);
   },
 
+  createGrandFleetWithSkills: async (skillConfig) => {
+    if (!ensureAuthenticated('create custom Grand Fleet')) {
+      return { initialFit: 0, finalFit: 0, optimizationApplied: false };
+    }
+    set({ isGenerating: true });
+    return new Promise((resolve) => {
+      setTimeout(async () => {
+        const participants = get().participants;
+        const challenges = get().challenges;
+        const existingCrews = get().crews;
+        const baseConfig = get().eventConfig;
+
+        const result = generateOptimizedGrandFleet(
+          participants,
+          challenges,
+          skillConfig,
+          baseConfig,
+          existingCrews
+        );
+
+        set({
+          crews: result.crews,
+          stowaways: result.stowaways,
+          balanceScore: result.balanceScore,
+          eventConfig: {
+            ...baseConfig,
+            crewSize: skillConfig.crewSize || baseConfig.crewSize,
+            crewCount: skillConfig.crewCount || baseConfig.crewCount,
+            seed: result.optimizedSeed,
+            selectedSkills: skillConfig.selectedSkills,
+            targetFitThreshold: skillConfig.targetFitThreshold,
+          },
+          isGenerating: false,
+        });
+
+        await api.saveFleetState({
+          participants: get().participants,
+          challenges: get().challenges,
+          crews: result.crews,
+          stowaways: result.stowaways,
+          eventConfig: get().eventConfig,
+          balanceScore: result.balanceScore,
+        });
+
+        get().addBerries(6000000);
+        get().setHakiVfx('conqueror');
+
+        if (result.optimizationApplied) {
+          get().showToast({
+            title: '⚡ Grand Fleet Auto-Optimized!',
+            message: `Created Grand Fleet with ${result.finalFitScore}% Fit criteria (optimized from ${result.initialFitScore}%) based on selected skills!`,
+            type: 'haki',
+          });
+        } else {
+          get().showToast({
+            title: '⚓ Grand Fleet Assembled!',
+            message: `Formed ${result.crews.length} divisions with ${result.finalFitScore}% Fit score based on selected skills!`,
+            type: 'haki',
+          });
+        }
+
+        resolve({
+          initialFit: result.initialFitScore,
+          finalFit: result.finalFitScore,
+          optimizationApplied: result.optimizationApplied,
+        });
+      }, 500);
+    });
+  },
+
+  autoOptimizeGrandFleet: async (targetThreshold = 85) => {
+    if (!ensureAuthenticated('auto-optimize Grand Fleet for trials')) {
+      return { initialFit: 0, finalFit: 0, improvement: 0 };
+    }
+    set({ isGenerating: true });
+    return new Promise((resolve) => {
+      setTimeout(async () => {
+        const participants = get().participants;
+        const challenges = get().challenges;
+        const existingCrews = get().crews;
+        const baseConfig = get().eventConfig;
+
+        const skillConfig: GrandFleetSkillConfig = {
+          selectedSkills: baseConfig.selectedSkills || ['combat', 'navigation', 'engineering', 'wits', 'cooking', 'medical'],
+          targetFitThreshold: targetThreshold,
+          autoOptimizeIfLowFit: true,
+          crewSize: baseConfig.crewSize,
+          crewCount: baseConfig.crewCount,
+        };
+
+        const result = generateOptimizedGrandFleet(
+          participants,
+          challenges,
+          skillConfig,
+          baseConfig,
+          existingCrews
+        );
+
+        const improvement = Math.max(0, result.finalFitScore - result.initialFitScore);
+
+        set({
+          crews: result.crews,
+          stowaways: result.stowaways,
+          balanceScore: result.balanceScore,
+          eventConfig: {
+            ...baseConfig,
+            seed: result.optimizedSeed,
+            targetFitThreshold: targetThreshold,
+          },
+          isGenerating: false,
+        });
+
+        await api.saveFleetState({
+          participants: get().participants,
+          challenges: get().challenges,
+          crews: result.crews,
+          stowaways: result.stowaways,
+          eventConfig: get().eventConfig,
+          balanceScore: result.balanceScore,
+        });
+
+        get().addBerries(5000000);
+        get().setHakiVfx('conqueror');
+        get().showToast({
+          title: '🔥 Grand Fleet Auto-Created!',
+          message: `Fleet fit upgraded to ${result.finalFitScore}% (+${improvement}% improvement) across all candidate divisions!`,
+          type: 'haki',
+        });
+
+        resolve({
+          initialFit: result.initialFitScore,
+          finalFit: result.finalFitScore,
+          improvement,
+        });
+      }, 500);
+    });
+  },
+
+  addCustomFleetDivision: async (name, shipName, skills, size) => {
+    if (!ensureAuthenticated('add custom division')) return;
+    const participants = get().participants;
+    const challenges = get().challenges;
+    const crews = get().crews;
+    const stowaways = get().stowaways;
+
+    const candidatePool = stowaways.length >= size
+      ? participants.filter(p => stowaways.includes(p.id))
+      : participants.filter(p => !crews.some(c => c.isLocked && c.members.some(m => m.participantId === p.id)));
+
+    const newCrew = createSkillBasedDivision(name, shipName, skills, size, candidatePool, challenges);
+    if (!newCrew) {
+      get().showToast({
+        title: 'Insufficient Candidates',
+        message: 'Not enough candidates available to form this new division.',
+        type: 'warning',
+      });
+      return;
+    }
+
+    const assignedIds = new Set(newCrew.members.map(m => m.participantId));
+    const updatedCrews = crews.map(c => ({
+      ...c,
+      members: c.members.filter(m => !assignedIds.has(m.participantId)),
+    })).filter(c => c.members.length > 0);
+
+    updatedCrews.push(newCrew);
+    const updatedStowaways = stowaways.filter(id => !assignedIds.has(id));
+
+    set({ crews: updatedCrews, stowaways: updatedStowaways });
+    await api.saveFleetState({
+      participants: get().participants,
+      challenges: get().challenges,
+      crews: updatedCrews,
+      stowaways: updatedStowaways,
+      eventConfig: get().eventConfig,
+      balanceScore: get().balanceScore,
+    });
+
+    get().addBerries(4000000);
+    get().showToast({
+      title: 'New Fleet Division Commissioned!',
+      message: `${newCrew.name} (${newCrew.shipName}) added with ${newCrew.fitScore || 85}% Fit score!`,
+      type: 'info',
+    });
+  },
+
   resetAll: async () => {
+    if (!ensureAuthenticated('reset demo data')) return;
     const resetData = await api.resetToDemo();
     set({
       participants: resetData.participants,

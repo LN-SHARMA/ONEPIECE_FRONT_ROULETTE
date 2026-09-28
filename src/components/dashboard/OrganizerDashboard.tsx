@@ -1,10 +1,27 @@
 import React from 'react';
 import { useFleetStore } from '../../store/fleetStore';
+import { useAuthStore } from '../../store/authStore';
 import { ALL_ROLES, PirateRole } from '../../types';
-import { Shield, Users, Trophy, Scale, Anchor, RefreshCw, Zap } from 'lucide-react';
+import { Shield, Users, Trophy, Scale, Anchor, RefreshCw, Zap, Lock } from 'lucide-react';
 
 export const OrganizerDashboard: React.FC<{ onJumpToSection?: (id: string) => void }> = ({ onJumpToSection }) => {
   const { participants, crews, challenges, balanceScore, assembleFleet, resetAll, isGenerating } = useFleetStore();
+  const { isAuthenticated, requireAuth } = useAuthStore();
+
+  const handleAssemble = () => {
+    if (!requireAuth('assemble the fleet')) return;
+    assembleFleet(false);
+  };
+
+  const handleReshuffle = () => {
+    if (!requireAuth('reshuffle the fleet tides')) return;
+    assembleFleet(true);
+  };
+
+  const handleReset = () => {
+    if (!requireAuth('reset demo data')) return;
+    resetAll();
+  };
 
   // Role Coverage Heatmap calculation
   const roleCounts: Record<PirateRole, number> = ALL_ROLES.reduce((acc, role) => {
@@ -30,6 +47,11 @@ export const OrganizerDashboard: React.FC<{ onJumpToSection?: (id: string) => vo
               Fleet Commander Console
             </span>
             <span className="text-xs text-slate-400">Grand Line Event Coordination</span>
+            {!isAuthenticated && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                <Lock className="w-3 h-3 text-amber-400" /> Read-Only
+              </span>
+            )}
           </div>
           <h2 className="font-pirate text-3xl sm:text-4xl text-parchment tracking-wide mt-1">
             Organizer Fleet Operations
@@ -39,26 +61,26 @@ export const OrganizerDashboard: React.FC<{ onJumpToSection?: (id: string) => vo
         {/* Quick Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={() => assembleFleet(false)}
+            onClick={handleAssemble}
             disabled={isGenerating}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-red-600/30 active:scale-95 transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-red-600/30 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
           >
             <Zap className="w-4 h-4 text-yellow-300" />
             <span>Assemble Fleet</span>
           </button>
 
           <button
-            onClick={() => assembleFleet(true)}
+            onClick={handleReshuffle}
             disabled={isGenerating}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-semibold rounded-xl text-sm transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-semibold rounded-xl text-sm transition-all cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
             <span>Reshuffle Tides</span>
           </button>
 
           <button
-            onClick={resetAll}
-            className="px-3.5 py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl text-xs transition-colors"
+            onClick={handleReset}
+            className="px-3.5 py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl text-xs transition-colors cursor-pointer"
           >
             Reset Demo Data
           </button>

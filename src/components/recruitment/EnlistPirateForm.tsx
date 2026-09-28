@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useFleetStore } from '../../store/fleetStore';
+import { useAuthStore } from '../../store/authStore';
 import { ALL_ROLES, PirateRole, DevilFruitType, SkillSet, JollyRogerStyle, CSE_SKILL_META } from '../../types';
 import { SKILL_AXES, deriveHaki } from '../../services/teamEngine';
 import { JollyRogerAvatar, DevilFruitSwirlIcon } from '../common/SvgIcons';
-import { PlusCircle, Sparkles, HelpCircle, ShieldAlert, Check } from 'lucide-react';
+import { PlusCircle, Sparkles, HelpCircle, ShieldAlert, Check, Lock } from 'lucide-react';
 
 const DEVIL_FRUITS: DevilFruitType[] = ['None', 'Paramecia', 'Zoan', 'Logia', 'Mythical Zoan'];
 
@@ -12,6 +13,7 @@ const SYMBOLS: JollyRogerStyle['symbol'][] = ['crossbones', 'swords', 'flames', 
 
 export const EnlistPirateForm: React.FC = () => {
   const { addParticipant } = useFleetStore();
+  const { isAuthenticated, requireAuth, openLoginModal } = useAuthStore();
 
   const [name, setName] = useState('');
   const [epithet, setEpithet] = useState('');
@@ -45,6 +47,9 @@ export const EnlistPirateForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth('enlist a new pirate into the fleet')) {
+      return;
+    }
     if (!name.trim()) return;
 
     const interests = interestsInput
@@ -83,6 +88,26 @@ export const EnlistPirateForm: React.FC = () => {
           Issue a new bounty poster. Skills directly balance Davy Back Fight crew formation.
         </p>
       </div>
+
+      {/* Read-Only Notice for Guests */}
+      {!isAuthenticated && (
+        <div className="mt-4 p-4 rounded-2xl bg-amber-950/70 border border-amber-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5 text-amber-200">
+            <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <strong className="text-amber-300 block">Recruitment Desk Locked (Read-Only Mode)</strong>
+              <span>Viewing and previewing bounties is open. Sign in with a demo officer or pirate pass to submit official records.</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => openLoginModal('enlist new recruits')}
+            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shrink-0 self-start sm:self-auto cursor-pointer shadow-md transition-all active:scale-95"
+          >
+            ⚓ Sign In (Demo Available)
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Columns: Inputs (7 cols) */}
@@ -303,10 +328,23 @@ export const EnlistPirateForm: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-pirate text-2xl tracking-wider uppercase rounded-2xl shadow-xl shadow-amber-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+            className={`w-full py-3.5 font-pirate text-2xl tracking-wider uppercase rounded-2xl shadow-xl active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              isAuthenticated
+                ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-amber-500/20'
+                : 'bg-gradient-to-r from-amber-600/90 via-amber-500/90 to-amber-700/90 hover:from-amber-500 hover:to-amber-600 text-slate-950 border border-amber-400/60'
+            }`}
           >
-            <PlusCircle className="w-6 h-6" />
-            <span>Enlist Pirate into Roster</span>
+            {isAuthenticated ? (
+              <>
+                <PlusCircle className="w-6 h-6" />
+                <span>Enlist Pirate into Roster</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-6 h-6 text-slate-950" />
+                <span>Sign In to Enlist Pirate (Demo Available)</span>
+              </>
+            )}
           </button>
         </div>
 

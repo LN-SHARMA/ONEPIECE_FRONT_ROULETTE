@@ -1,6 +1,7 @@
 import React from 'react';
 import { Crew, Participant, ALL_ROLES } from '../../types';
 import { useFleetStore } from '../../store/fleetStore';
+import { useAuthStore } from '../../store/authStore';
 import { deriveHaki } from '../../services/teamEngine';
 import { CrewRadarChart } from './CrewRadarChart';
 import { JollyRogerAvatar, DevilFruitSwirlIcon } from '../common/SvgIcons';
@@ -20,14 +21,32 @@ export const CrewCard: React.FC<CrewCardProps> = ({
   onDropMember,
 }) => {
   const { toggleCrewLock, toggleMemberPin, eventConfig, challenges, assignChallengeToCrew } = useFleetStore();
+  const { isAuthenticated, requireAuth } = useAuthStore();
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (!isAuthenticated) return;
     e.preventDefault();
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (!requireAuth('swap crew members between divisions')) return;
     e.preventDefault();
     onDropMember?.(crew.id);
+  };
+
+  const handleToggleCrewLock = () => {
+    if (!requireAuth('lock or unlock fleet divisions')) return;
+    toggleCrewLock(crew.id);
+  };
+
+  const handleAssignChallenge = (challengeId: string) => {
+    if (!requireAuth('assign sea trials to divisions')) return;
+    assignChallengeToCrew(crew.id, challengeId);
+  };
+
+  const handleToggleMemberPin = (memberId: string) => {
+    if (!requireAuth('pin or unpin crew members')) return;
+    toggleMemberPin(crew.id, memberId);
   };
 
   const assignedRolesSet = new Set(crew.members.map(m => m.assignedRole));
@@ -80,13 +99,13 @@ export const CrewCard: React.FC<CrewCardProps> = ({
 
           {/* Crew Lock Button */}
           <button
-            onClick={() => toggleCrewLock(crew.id)}
-            className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
+            onClick={handleToggleCrewLock}
+            className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
               crew.isLocked
                 ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
                 : 'bg-slate-900/80 text-slate-400 border-slate-700 hover:text-slate-200'
             }`}
-            title={crew.isLocked ? 'Crew Locked: Protected against reshuffle' : 'Lock Crew'}
+            title={!isAuthenticated ? 'Sign in to lock/unlock crew' : crew.isLocked ? 'Crew Locked: Protected against reshuffle' : 'Lock Crew'}
             aria-label={crew.isLocked ? 'Unlock crew' : 'Lock crew'}
           >
             {crew.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
@@ -101,7 +120,7 @@ export const CrewCard: React.FC<CrewCardProps> = ({
           </span>
           <select
             value={crew.assignedChallengeId || ''}
-            onChange={(e) => assignChallengeToCrew(crew.id, e.target.value)}
+            onChange={(e) => handleAssignChallenge(e.target.value)}
             className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-500/50 text-amber-300 text-xs font-semibold outline-none max-w-[200px] truncate cursor-pointer transition-colors"
           >
             <option value="" className="text-slate-400 font-normal">-- Select Trial to Assign --</option>
@@ -204,9 +223,13 @@ export const CrewCard: React.FC<CrewCardProps> = ({
             return (
               <div
                 key={member.participantId}
-                draggable={!crew.isLocked && !member.isPinned}
-                onDragStart={() => onDragStartMember?.(crew.id, member.participantId)}
-                className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 cursor-grab active:cursor-grabbing ${
+                draggable={isAuthenticated && !crew.isLocked && !member.isPinned}
+                onDragStart={() => isAuthenticated && onDragStartMember?.(crew.id, member.participantId)}
+                className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 ${
+                  isAuthenticated && !crew.isLocked && !member.isPinned
+                    ? 'cursor-grab active:cursor-grabbing'
+                    : 'cursor-default'
+                } ${
                   member.isPinned
                     ? 'bg-amber-950/40 border-amber-500/40'
                     : isConquerorWielder
@@ -253,13 +276,19 @@ export const CrewCard: React.FC<CrewCardProps> = ({
 
                   {/* Pin Member Toggle (R12) */}
                   <button
-                    onClick={() => toggleMemberPin(crew.id, member.participantId)}
-                    className={`p-1 rounded text-xs transition-colors ${
+                    onClick={() => handleToggleMemberPin(member.participantId)}
+                    className={`p-1 rounded text-xs transition-colors cursor-pointer ${
                       member.isPinned
                         ? 'text-amber-400 bg-amber-500/20 hover:bg-amber-500/30'
                         : 'text-slate-500 hover:text-slate-300'
                     }`}
-                    title={member.isPinned ? 'Member Pinned: Stays in this crew on reshuffle' : 'Pin Member'}
+                    title={
+                      !isAuthenticated
+                        ? 'Sign in to pin member'
+                        : member.isPinned
+                        ? 'Member Pinned: Stays in this crew on reshuffle'
+                        : 'Pin Member'
+                    }
                     aria-label={member.isPinned ? 'Unpin member' : 'Pin member'}
                   >
                     {member.isPinned ? <Pin className="w-3.5 h-3.5" /> : <PinOff className="w-3.5 h-3.5" />}

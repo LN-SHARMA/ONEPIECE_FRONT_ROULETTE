@@ -1,16 +1,25 @@
 import React from 'react';
 import { useFleetStore } from '../../store/fleetStore';
-import { Users, Sliders, Shield } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
+import { Users, Sliders, Shield, Lock } from 'lucide-react';
 
 export const EventConfigPanel: React.FC = () => {
   const { eventConfig, updateConfig, participants, assembleFleet } = useFleetStore();
+  const { isAuthenticated, requireAuth } = useAuthStore();
 
   const handleCrewSizeChange = (val: number) => {
+    if (!requireAuth('modify crew size rule')) return;
     updateConfig({ crewSize: val });
   };
 
   const handleCrewCountChange = (val: number | undefined) => {
+    if (!requireAuth('modify total crews override rule')) return;
     updateConfig({ crewCount: val });
+  };
+
+  const handleApply = () => {
+    if (!requireAuth('apply event rules and reshuffle fleet')) return;
+    assembleFleet(true);
   };
 
   const estimatedCrews = eventConfig.crewCount || Math.floor(participants.length / eventConfig.crewSize);
@@ -24,6 +33,11 @@ export const EventConfigPanel: React.FC = () => {
           <span className="text-xs font-bold uppercase tracking-wider text-orange-300">
             Davy Back Fight Event Rules
           </span>
+          {!isAuthenticated && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <Lock className="w-3 h-3 text-amber-400" /> Read-Only
+            </span>
+          )}
         </div>
         <span className="text-xs text-slate-400">
           Target Crew Formation: <strong className="text-amber-400">{estimatedCrews} Crews</strong>
@@ -89,8 +103,8 @@ export const EventConfigPanel: React.FC = () => {
             </select>
 
             <button
-              onClick={() => assembleFleet(true)}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+              onClick={handleApply}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
             >
               Apply
             </button>

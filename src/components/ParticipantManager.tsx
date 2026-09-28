@@ -33,6 +33,13 @@ export const ParticipantManager: React.FC = () => {
       secondaryRole,
       skills,
       interests: interests.split(',').map(s => s.trim()).filter(Boolean),
+      devilFruit: 'None',
+      jollyRogerStyle: {
+        baseColor: '#09090b',
+        accentColor: '#f59e0b',
+        hatType: 'straw',
+        symbol: 'crossbones',
+      },
     });
     setName(''); setEpithet(''); setInterests('');
     setSkills({ combat: 3, navigation: 3, cooking: 3, medical: 3, engineering: 3, wits: 3 });

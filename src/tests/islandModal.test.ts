@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useFleetStore } from '../store/fleetStore';
+import { useAuthStore } from '../store/authStore';
 import { INITIAL_PARTICIPANTS, INITIAL_CHALLENGES } from '../data/seedData';
 import { generateTeams } from '../services/teamEngine';
 
 describe('IslandBuildingModal & World Map Logic Integration', () => {
   beforeEach(() => {
+    useAuthStore.setState({ isAuthenticated: true });
     useFleetStore.setState({
       participants: [...INITIAL_PARTICIPANTS],
       challenges: [...INITIAL_CHALLENGES],

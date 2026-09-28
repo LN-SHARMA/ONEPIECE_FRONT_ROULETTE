@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useFleetStore } from '../../store/fleetStore';
+import { useAuthStore } from '../../store/authStore';
 import { Challenge, Crew, CSE_SKILL_META, SkillSet } from '../../types';
 import { evaluateChallengeFit } from '../../services/teamEngine';
 import { JollyRogerAvatar } from '../common/SvgIcons';
 import { CreateTrialModal } from '../trials/CreateTrialModal';
 import { 
   Trophy, Users, CheckCircle2, Circle, AlertTriangle, Shield, Cpu, Code, 
-  Layers, Plus, RefreshCw, Copy, Check, ChevronRight, X, ExternalLink, Sparkles
+  Layers, Plus, RefreshCw, Copy, Check, ChevronRight, X, ExternalLink, Sparkles, Lock
 } from 'lucide-react';
 
 interface ChallengeTeamDashboardProps {
@@ -28,6 +29,7 @@ export const ChallengeTeamDashboard: React.FC<ChallengeTeamDashboardProps> = ({
     assembleFleet, 
     showToast 
   } = useFleetStore();
+  const { isAuthenticated, requireAuth } = useAuthStore();
 
   const [selectedChallengeId, setSelectedChallengeId] = useState<string>(
     initialChallengeId || challenges[0]?.id || ''
@@ -61,6 +63,7 @@ export const ChallengeTeamDashboard: React.FC<ChallengeTeamDashboardProps> = ({
 
   // Handle reassigning team to this challenge
   const handleAssignTeam = async (crewId: string) => {
+    if (!requireAuth('assign team to challenge')) return;
     setActiveCrewId(crewId);
     await assignChallengeToCrew(crewId, activeChallenge.id);
     showToast({
@@ -133,10 +136,13 @@ export const ChallengeTeamDashboard: React.FC<ChallengeTeamDashboardProps> = ({
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              if (!requireAuth('create a CSE challenge')) return;
+              setShowCreateModal(true);
+            }}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shadow-lg shadow-orange-600/30 transition-all cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            {isAuthenticated ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
             <span>Create CSE Challenge</span>
           </button>
 
